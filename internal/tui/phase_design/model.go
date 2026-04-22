@@ -53,6 +53,11 @@ type Model struct {
 
 	// visualMode toggles the Kitty GFX renderer (true) vs the ANSI renderer (false).
 	visualMode bool
+
+	// narrowShowsDiagram toggles, in <80-col layouts, between the layer list
+	// (false, default) and the diagram (true). Triggered with 'd' when no
+	// modal is open.
+	narrowShowsDiagram bool
 }
 
 // New returns a fresh design-phase model seeded with the registry and an empty stack.
@@ -124,6 +129,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				return m, func() tea.Msg { return tui.PhaseChangeMsg{To: tui.PhaseSetup} }
 			}
 		}
+		// 'd' toggles the narrow layout between layer list and diagram —
+		// only when the terminal is narrow enough that both panes don't fit.
+		if msg.String() == "d" && m.width < 80 && m.layers.mode == modeLayerList {
+			m.narrowShowsDiagram = !m.narrowShowsDiagram
+			return m, nil
+		}
 		cmd, _ := m.layers.Update(msg)
 		return m, cmd
 	}
@@ -166,11 +177,21 @@ func (m Model) viewWide() string {
 }
 
 func (m Model) viewNarrow() string {
-	// Left pane only. Step 13 adds a [d] diagram toggle.
+	// Narrow layout: one pane at a time. 'd' toggles between layers and diagram.
+	innerW := m.width - 2
+	innerH := m.height - 2
+	var body string
+	if m.narrowShowsDiagram {
+		body = m.renderDiagram(innerW, innerH-1)
+		body = theme.Dim.Render("[d] toggle to layers") + "\n" + body
+	} else {
+		body = m.layers.View(innerW-2, innerH-3)
+		body = theme.Dim.Render("[d] toggle to diagram") + "\n" + body
+	}
 	return theme.PaneBorder.
-		Width(m.width - 2).
-		Height(m.height - 2).
-		Render(m.layers.View(m.width-4, m.height-4))
+		Width(innerW).
+		Height(innerH).
+		Render(body)
 }
 
 // renderDiagram produces the right-pane content. When the stack has no

@@ -82,8 +82,11 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			// Later phases (setup especially) will need to cancel in-flight
-			// child processes before quitting — Step 13 wires that properly.
+			// Tear down any running child process so brew / flyctl / aws
+			// don't keep running after the TUI exits.
+			if m.phase == tui.PhaseSetup {
+				m.setup.Cancel()
+			}
 			return m, tea.Quit
 		}
 
@@ -183,8 +186,12 @@ func (m rootModel) renderTitleBar() string {
 	if m.opts.Capabilities.VisualMode(m.opts.NoKitty) {
 		mode = "visual"
 	}
-	title := fmt.Sprintf("stackwright  ·  %s  ·  phase: %s  ·  mode: %s  ·  %s",
-		name, m.phase, mode, src)
+	offline := ""
+	if m.opts.Offline {
+		offline = "  ·  " + theme.Dim.Render("offline")
+	}
+	title := fmt.Sprintf("stackwright  ·  %s  ·  phase: %s  ·  mode: %s  ·  %s%s",
+		name, m.phase, mode, src, offline)
 	return theme.TitleBar.Width(m.width).Render(title)
 }
 

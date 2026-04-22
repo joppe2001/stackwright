@@ -86,6 +86,16 @@ func New(bundle registry.Bundle, stack tui.Stack) Model {
 
 func (m *Model) SetSize(w, h int) { m.width = w; m.height = h }
 
+// Cancel tears down any running child process. Called by the root model
+// when the user hits ctrl+c so brew / flyctl / aws don't keep running
+// after the TUI exits.
+func (m *Model) Cancel() {
+	if m.proc != nil {
+		m.proc.Cancel()
+		m.proc = nil
+	}
+}
+
 // Init kicks off the wizard by starting the first tech's CHECKING step.
 func (m Model) Init() tea.Cmd {
 	if len(m.items) == 0 {
