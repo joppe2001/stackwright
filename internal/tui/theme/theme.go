@@ -94,3 +94,24 @@ var Accent = lipgloss.NewStyle().Foreground(CAccent).Bold(true)
 
 // Good is for success/✓ marks (teal).
 var Good = lipgloss.NewStyle().Foreground(CTeal)
+
+// KeyPill is the rounded-border key hint used in the status bar.
+// Renders the key in accent-bold inside a subtle surface pill.
+var KeyPill = lipgloss.NewStyle().
+	Foreground(CAccent).
+	Background(CSurface).
+	Padding(0, 1).
+	Bold(true)
+
+// Pane is a rounded thick border used as the outer pane frame — gives the
+// TUI the "app window" feel from the mockup.
+var Pane = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(CBorderDefault).
+	Padding(0, 1)
+
+// PaneFocused mirrors Pane but with the active-border color.
+var PaneFocused = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(CBorderActive).
+	Padding(0, 1)

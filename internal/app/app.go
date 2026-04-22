@@ -6,6 +6,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -195,15 +196,35 @@ func (m rootModel) renderTitleBar() string {
 	return theme.TitleBar.Width(m.width).Render(title)
 }
 
+// renderStatusBar produces the bottom keybind row. Each shortcut is wrapped
+// in a rounded pill so the key itself stands out from the description —
+// matches the "pill" affordance from the mockup.
 func (m rootModel) renderStatusBar() string {
-	var hint string
+	var hints [][2]string // {key, label}
 	switch m.phase {
 	case tui.PhaseDesign:
-		hint = "↑↓ nav  ·  space/enter open  ·  / search  ·  del clear  ·  g generate  ·  q quit"
+		hints = [][2]string{
+			{"↑↓", "nav"},
+			{"space", "open"},
+			{"/", "search"},
+			{"del", "clear"},
+			{"g", "generate"},
+			{"q", "quit"},
+		}
 	case tui.PhaseSetup:
-		hint = "b back  ·  g advance  ·  q quit"
+		hints = [][2]string{
+			{"b", "back"},
+			{"g", "advance"},
+			{"q", "quit"},
+		}
 	case tui.PhaseScaffold:
-		hint = "q quit"
+		hints = [][2]string{{"q", "quit"}}
 	}
-	return theme.StatusBar.Width(m.width).Render(hint)
+	parts := make([]string, 0, len(hints))
+	for _, h := range hints {
+		parts = append(parts,
+			theme.KeyPill.Render(h[0])+" "+theme.Dim.Render(h[1]),
+		)
+	}
+	return theme.StatusBar.Width(m.width).Render(strings.Join(parts, "   "))
 }

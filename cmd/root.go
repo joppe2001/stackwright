@@ -13,13 +13,14 @@ var Version = "0.1.0-dev"
 
 // Global flags. Exported so subcommands can read them.
 var (
-	FlagNoKitty bool
+	FlagKitty   bool // opt IN to the Kitty GFX renderer
 	FlagOffline bool
 )
 
 var (
 	flagDetect  bool
 	flagVersion bool
+	flagNoKitty bool // back-compat alias; kept so --no-kitty doesn't error out.
 )
 
 var rootCmd = &cobra.Command{
@@ -36,18 +37,21 @@ and an architecture diagram PNG.`,
 			fmt.Println("stackwright", Version)
 			return nil
 		}
+		// useVisual: true only if the user explicitly opted in AND didn't also
+		// pass --no-kitty (which wins for back-compat).
+		useVisual := FlagKitty && !flagNoKitty
 		if flagDetect {
 			caps := detect.Probe()
-			detect.PrintReport(os.Stdout, caps, FlagNoKitty)
+			detect.PrintReport(os.Stdout, caps, !useVisual)
 			return nil
 		}
-		// Default action: launch the TUI run flow.
-		return runTUI(FlagNoKitty, FlagOffline)
+		return runTUI(!useVisual, FlagOffline)
 	},
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&FlagNoKitty, "no-kitty", false, "force standard (ANSI/Unicode) render mode")
+	rootCmd.PersistentFlags().BoolVar(&FlagKitty, "kitty", false, "opt in to the Kitty Graphics renderer (experimental — some artifacts on resize)")
+	rootCmd.PersistentFlags().BoolVar(&flagNoKitty, "no-kitty", false, "back-compat: force standard mode (now the default)")
 	rootCmd.PersistentFlags().BoolVar(&FlagOffline, "offline", false, "skip registry fetch; use bundled + local only")
 	rootCmd.Flags().BoolVar(&flagDetect, "detect", false, "print terminal capability report and exit")
 	rootCmd.Flags().BoolVar(&flagVersion, "version", false, "print version and exit")

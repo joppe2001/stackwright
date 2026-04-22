@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joppe2001/stackwright/internal/registry"
 	"github.com/joppe2001/stackwright/internal/tui"
@@ -159,66 +160,64 @@ func (m Model) View() string {
 }
 
 func (m Model) viewWide() string {
-	leftInnerW := m.leftWidth - 2
-	rightInnerW := m.width - m.leftWidth - 2
+	// 2 cols lost to each pane's border + 2 cols padding inside.
+	leftContentW := m.leftWidth - 4
+	rightContentW := m.width - m.leftWidth - 4
 	innerH := m.height - 2
 
-	left := theme.PaneBorder.
-		Width(leftInnerW).
-		Height(innerH).
-		Render(m.layers.View(leftInnerW, innerH))
+	leftBody := m.layers.View(leftContentW, innerH-2)
+	rightBody := m.renderDiagram(rightContentW, innerH-2)
 
-	right := theme.PaneBorder.
-		Width(rightInnerW).
-		Height(innerH).
-		Render(m.renderDiagram(rightInnerW, innerH))
+	left := theme.Pane.
+		Width(leftContentW).
+		Height(innerH - 2).
+		Render(leftBody)
 
-	return sideBySide(left, right)
+	right := theme.Pane.
+		Width(rightContentW).
+		Height(innerH - 2).
+		Render(rightBody)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
 func (m Model) viewNarrow() string {
 	// Narrow layout: one pane at a time. 'd' toggles between layers and diagram.
-	innerW := m.width - 2
-	innerH := m.height - 2
+	contentW := m.width - 4
+	contentH := m.height - 4
 	var body string
 	if m.narrowShowsDiagram {
-		body = m.renderDiagram(innerW, innerH-1)
-		body = theme.Dim.Render("[d] toggle to layers") + "\n" + body
+		hint := theme.Dim.Render("[d] toggle to layers")
+		body = hint + "\n" + m.renderDiagram(contentW, contentH-1)
 	} else {
-		body = m.layers.View(innerW-2, innerH-3)
-		body = theme.Dim.Render("[d] toggle to diagram") + "\n" + body
+		hint := theme.Dim.Render("[d] toggle to diagram")
+		body = hint + "\n" + m.layers.View(contentW, contentH-1)
 	}
-	return theme.PaneBorder.
-		Width(innerW).
-		Height(innerH).
+	return theme.Pane.
+		Width(contentW).
+		Height(contentH).
 		Render(body)
 }
 
-// renderDiagram produces the right-pane content. When the stack has no
-// selections yet, shows a help hint; otherwise renders the live diagram
-// using the Kitty PNG renderer (visual mode) or the ANSI renderer (standard).
+// renderDiagram produces the right-pane content. The dot-grid canvas is
+// always rendered so the pane never looks empty; nodes fade in as layers
+// get selections, and a tiny overlay message guides the user until then.
 func (m Model) renderDiagram(w, h int) string {
-	entries := m.stack.SelectedEntries(m.registry)
-	if len(entries) == 0 {
-		var b strings.Builder
-		b.WriteString(theme.Accent.Render("LIVE DIAGRAM"))
-		b.WriteString("\n\n")
-		if m.stack.AppName == "" {
-			b.WriteString(theme.Dim.Render("Set an app name, then pick a technology for a layer."))
-		} else {
-			b.WriteString(theme.Dim.Render("Pick a technology for a layer to see the diagram."))
-		}
-		return b.String()
+	// Reserve 1 line for the header and 1 for the footer.
+	bodyH := h - 2
+	if bodyH < 8 {
+		bodyH = 8
 	}
 
-	layout := diagram.Compute(m.stack, m.registry, w, h-2)
+	layout := diagram.Compute(m.stack, m.registry, w, bodyH)
 
 	var body string
 	if m.visualMode {
-		view, err := diagram.RenderKittyView(layout, m.frame, w, h-2)
+		// Visual (Kitty) mode emits an APC sequence the terminal displays
+		// out-of-band of the cell grid; it's opt-in behind --kitty because
+		// bubbletea's cell-layout diff can't reclaim image pixels on resize.
+		view, err := diagram.RenderKittyView(layout, m.frame, w, bodyH)
 		if err != nil {
-			// Fall back to ANSI silently on any error — log would go to stderr
-			// but bubbletea owns stderr until exit, so just degrade the render.
 			body = diagram.RenderStandard(layout, m.frame)
 		} else {
 			body = view
@@ -227,13 +226,26 @@ func (m Model) renderDiagram(w, h int) string {
 		body = diagram.RenderStandard(layout, m.frame)
 	}
 
-	var footer string
-	if m.readyToAdvance() {
-		footer = theme.Good.Render("  Press 'g' to continue to setup.")
-	} else {
-		footer = theme.Dim.Render("  Keep selecting layers…")
+	// Header: "live diagram" + badge for data-flow animation state.
+	header := theme.Accent.Render("live diagram")
+	if m.stack.AppName != "" {
+		header += "   " + theme.Good.Render("● "+m.stack.AppName)
 	}
-	return body + "\n" + footer
+
+	// Footer hint.
+	var footer string
+	switch {
+	case m.readyToAdvance():
+		footer = theme.Good.Render("press 'g' to continue to setup")
+	case m.stack.AppName == "":
+		footer = theme.Dim.Render("set an app name, then pick a technology for a layer")
+	case len(layout.Nodes) == 0:
+		footer = theme.Dim.Render("pick a technology for a layer to see it appear")
+	default:
+		footer = theme.Dim.Render("keep selecting layers…")
+	}
+
+	return header + "\n" + body + "\n" + footer
 }
 
 // countSet reports how many layers in the stack are populated.
@@ -279,26 +291,6 @@ func leftPaneWidth(total int) int {
 	return 22
 }
 
-// sideBySide horizontally joins two already-rendered blocks. Rolls our own
-// instead of using lipgloss.JoinHorizontal so we can add a 1-col gutter
-// without having to re-measure each pane's rendered width.
-func sideBySide(a, b string) string {
-	aLines := strings.Split(a, "\n")
-	bLines := strings.Split(b, "\n")
-	n := len(aLines)
-	if len(bLines) > n {
-		n = len(bLines)
-	}
-	out := make([]string, n)
-	for i := 0; i < n; i++ {
-		var l, r string
-		if i < len(aLines) {
-			l = aLines[i]
-		}
-		if i < len(bLines) {
-			r = bLines[i]
-		}
-		out[i] = l + r
-	}
-	return strings.Join(out, "\n")
-}
+// (sideBySide removed — the design phase now uses lipgloss.JoinHorizontal
+// after the rounded-pane redesign.)
+var _ = strings.Split // keep strings imported for other uses

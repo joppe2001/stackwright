@@ -139,10 +139,12 @@ func drawDotGrid(c *canvas) {
 	}
 }
 
-// drawNode renders a rounded-border box with the tech name and category pill.
-// Tech color colors the border so the eye associates the box with the tech.
+// drawNode renders a rounded-border box with the tech name (bold-ish via
+// primary color) and a muted subtitle line showing the category. Tech color
+// colors the border + left accent bar so the eye associates the card with
+// the tech at a glance. Matches the mockup's node-card aesthetic.
 func drawNode(c *canvas, n Node) {
-	// Fill the interior first with blanks so the dot grid doesn't bleed through.
+	// Fill the interior with blanks so the dot grid doesn't bleed through.
 	for y := n.Row + 1; y < n.Row+n.H-1; y++ {
 		for x := n.Col + 1; x < n.Col+n.W-1; x++ {
 			c.set(x, y, ' ', "", false)
@@ -163,14 +165,40 @@ func drawNode(c *canvas, n Node) {
 		c.set(n.Col+n.W-1, y, '│', n.Entry.DiagramColor, false)
 	}
 
-	// Interior: title, fitting into available space minus a left-padding.
+	// Left accent bar: double the border weight by filling column+1 too.
+	for y := n.Row + 1; y < n.Row+n.H-1; y++ {
+		c.set(n.Col+1, y, '▌', n.Entry.DiagramColor, false)
+	}
+
+	// Title row — primary color, centered-ish after the accent bar.
+	titleRow := n.Row + 1
 	title := n.Title
 	maxTitle := n.W - 4
 	if len(title) > maxTitle {
-		title = title[:maxTitle]
+		runes := []rune(title)
+		if len(runes) > maxTitle-1 {
+			title = string(runes[:maxTitle-1]) + "…"
+		}
 	}
 	for i, r := range title {
-		c.set(n.Col+2+i, n.Row+1, r, theme.TextPrimary, false)
+		c.set(n.Col+3+i, titleRow, r, theme.TextPrimary, false)
+	}
+
+	// Subtitle row — category in muted color, e.g. "frontend · app router".
+	if n.H >= 4 {
+		sub := n.SubTag
+		if sub == "" {
+			sub = string(n.Entry.Category)
+		}
+		if len(sub) > maxTitle {
+			runes := []rune(sub)
+			if len(runes) > maxTitle-1 {
+				sub = string(runes[:maxTitle-1]) + "…"
+			}
+		}
+		for i, r := range sub {
+			c.set(n.Col+3+i, titleRow+1, r, theme.TextSecondary, false)
+		}
 	}
 }
 
@@ -211,9 +239,9 @@ func drawConnection(c *canvas, up, down Node, conn Connection, frame int) {
 		c.set(p[0], p[1], glyph, conn.Color, false)
 	}
 
-	// Endpoint dots.
-	c.set(x1, y1, '●', conn.Color, false)
-	c.set(x2, y2, '●', conn.Color, false)
+	// Endpoint ports — open circles matching the mockup's port rings.
+	c.set(x1, y1, '○', conn.Color, false)
+	c.set(x2, y2, '○', conn.Color, false)
 
 	// Particles — 3 per connection, drifting along the curve over time.
 	for i := 0; i < 3; i++ {

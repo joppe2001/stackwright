@@ -264,33 +264,163 @@ func (m layersModel) View(w, h int) string {
 	return m.viewLayerList(w, h)
 }
 
+// viewLayerList renders the two-line-per-layer left-pane navigator.
+// Layout per layer (pane width w, no trailing border):
+//
+//	●  Frontend                      ✓     <- dot + bold name + right-aligned tick
+//	   Next.js 14                         <- indented muted selected value
+//
+// The selected row's name line is highlighted by swapping the name style
+// to accent-bold; a leading ▎ bar gives the row a visible cursor.
 func (m layersModel) viewLayerList(w, h int) string {
 	var b strings.Builder
-	b.WriteString(theme.Accent.Render("STACK LAYERS"))
+	b.WriteString(theme.Accent.Render("stack layers"))
 	b.WriteString("\n\n")
+
 	for i, l := range tui.AllLayers {
-		marker := " "
-		if m.cursor == i {
-			marker = "▶"
-		}
-		name := tui.LayerTitle(l)
-		value := m.layerValue(l)
-		tick := " "
-		if m.stack.IsSet(l) {
-			tick = theme.Good.Render("✓")
-		} else {
-			tick = theme.Dim.Render("–")
-		}
-		row := fmt.Sprintf("%s %-12s %s  %s", marker, name, tick, value)
-		if m.cursor == i {
-			row = theme.LayerRowSelected.Render(row)
-		}
-		b.WriteString(row)
+		b.WriteString(m.renderLayerRow(i, l, w))
 		b.WriteString("\n")
 	}
+
+	// Leave a blank line, then the confirm button + key hints.
 	b.WriteString("\n")
-	b.WriteString(theme.Dim.Render("space/enter · open   del · clear"))
+	if m.canGenerate() {
+		b.WriteString(theme.Good.Render("  ↓ confirm & generate  "))
+		b.WriteString("\n\n")
+	}
+	b.WriteString(theme.Dim.Render("space open  ·  del clear"))
 	return fitToHeight(b.String(), h)
+}
+
+// renderLayerRow draws one two-line layer entry.
+// w is the pane inner width in cells; we right-align the tick and truncate
+// the selected value so nothing wraps.
+func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
+	selected := m.cursor == i
+	isSet := m.stack.IsSet(l)
+
+	// Left gutter: "▎ " for the selected row, "  " otherwise. Width 2.
+	gutter := "  "
+	if selected {
+		gutter = theme.Accent.Render("▎ ")
+	}
+
+	// Colored dot — tech color when set, muted when not.
+	dotColor := theme.TextMuted
+	if isSet {
+		dotColor = m.layerDotColor(l)
+	}
+	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(dotColor)).Render("●")
+
+	// Name: bold + accent when the row is focused; primary otherwise.
+	name := tui.LayerTitle(l)
+	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.TextPrimary))
+	if selected {
+		nameStyle = nameStyle.Foreground(lipgloss.Color(theme.AccentPurple)).Bold(true)
+	}
+
+	// Tick or em-dash on the right edge.
+	tick := theme.Dim.Render(" ")
+	if isSet {
+		tick = theme.Good.Render("✓")
+	}
+
+	// Compute the padding that places the tick at column w-2.
+	// Layout is:  "gutter(2) dot(1) space(1) name  ...  tick(1)"
+	// Spaces between name and tick = w - 2 - 1 - 1 - nameLen - 1.
+	nameLen := lipgloss.Width(name)
+	pad := w - 2 - 1 - 1 - nameLen - 1
+	if pad < 1 {
+		pad = 1
+	}
+
+	line1 := gutter + dot + " " + nameStyle.Render(name) + strings.Repeat(" ", pad) + tick
+
+	// Second line: indented muted value, hard-truncated to w-4.
+	value := m.selectedValueText(l)
+	maxVal := w - 4
+	if maxVal < 4 {
+		maxVal = 4
+	}
+	if lipgloss.Width(value) > maxVal {
+		runes := []rune(value)
+		if len(runes) > maxVal-1 {
+			value = string(runes[:maxVal-1]) + "…"
+		}
+	}
+	line2 := "    " + theme.LayerValueMuted.Render(value)
+
+	return line1 + "\n" + line2
+}
+
+// selectedValueText returns the muted second-line text for a layer.
+// Returns "not set" when empty and the human name of the selected tech otherwise.
+func (m layersModel) selectedValueText(l tui.Layer) string {
+	if l == tui.LayerAppType {
+		if m.stack.AppName == "" {
+			return "not set"
+		}
+		return m.stack.AppName
+	}
+	slug := m.stack.Slug(l)
+	if slug == "" {
+		return "not set"
+	}
+	if e, ok := m.registry.BySlug(slug); ok {
+		return e.Name
+	}
+	return slug
+}
+
+// layerDotColor returns the hex color to use for the row's leading dot.
+// When the layer has a selected tech, use that tech's diagram_color; otherwise
+// fall back to a per-layer default so the dot column doesn't look monochrome.
+func (m layersModel) layerDotColor(l tui.Layer) string {
+	if l == tui.LayerAppType {
+		return theme.AccentPurple
+	}
+	if slug := m.stack.Slug(l); slug != "" {
+		if e, ok := m.registry.BySlug(slug); ok && e.DiagramColor != "" {
+			return e.DiagramColor
+		}
+	}
+	// Per-layer fallback palette roughly matching the mockup.
+	switch l {
+	case tui.LayerFrontend:
+		return "#7c6ff7"
+	case tui.LayerBackend:
+		return "#2dd4a0"
+	case tui.LayerAuth:
+		return "#a78bfa"
+	case tui.LayerDatabase:
+		return "#6aa2ce"
+	case tui.LayerCache:
+		return "#f59e0b"
+	case tui.LayerPayments:
+		return "#ec4899"
+	case tui.LayerInfra:
+		return "#22c55e"
+	case tui.LayerCICD:
+		return "#2088ff"
+	}
+	return theme.TextMuted
+}
+
+// canGenerate mirrors the readyToAdvance check on the parent Model — the
+// confirm-button is only shown when pressing 'g' would actually advance.
+func (m layersModel) canGenerate() bool {
+	if m.stack.AppName == "" {
+		return false
+	}
+	for _, l := range tui.AllLayers {
+		if l == tui.LayerAppType {
+			continue
+		}
+		if m.stack.IsSet(l) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m layersModel) viewSubList(w, h int) string {

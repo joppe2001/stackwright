@@ -79,8 +79,8 @@ func Compute(stack tui.Stack, bundle registry.Bundle, w, h int) Layout {
 	}
 
 	const (
-		nodeW = 20
-		nodeH = 3
+		nodeW = 22
+		nodeH = 4
 	)
 
 	// Group by row.

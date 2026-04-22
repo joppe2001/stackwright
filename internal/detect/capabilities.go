@@ -44,8 +44,13 @@ type Capabilities struct {
 
 // VisualMode reports whether visual (Kitty GFX) rendering is available.
 // Honors the --no-kitty flag passed by the caller.
-func (c Capabilities) VisualMode(noKittyFlag bool) bool {
-	return !noKittyFlag && c.KittyGraphics
+//
+// Note: visual mode is currently OFF by default even when Kitty Graphics is
+// available, because mixing Kitty GFX with bubbletea's cell-grid layout leads
+// to image-positioning artifacts on resize. Users who want visual mode can
+// explicitly opt in with --kitty (set opt-in via a separate flag; see cmd/root.go).
+func (c Capabilities) VisualMode(forceOff bool) bool {
+	return !forceOff && c.KittyGraphics
 }
 
 // Probe runs all detection checks synchronously and returns the result.
