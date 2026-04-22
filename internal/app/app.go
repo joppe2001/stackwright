@@ -57,10 +57,11 @@ type rootModel struct {
 }
 
 func newRootModel(opts Opts) rootModel {
+	visual := opts.Capabilities.VisualMode(opts.NoKitty)
 	return rootModel{
 		opts:   opts,
 		phase:  tui.PhaseDesign,
-		design: phase_design.New(opts.Registry.Bundle),
+		design: phase_design.New(opts.Registry.Bundle, visual),
 		stack:  tui.NewStack(),
 	}
 }

@@ -50,17 +50,22 @@ type Model struct {
 	// frame is the animation counter incremented by tickMsg. Used by the
 	// diagram renderer to advance particle positions.
 	frame int
+
+	// visualMode toggles the Kitty GFX renderer (true) vs the ANSI renderer (false).
+	visualMode bool
 }
 
 // New returns a fresh design-phase model seeded with the registry and an empty stack.
-func New(bundle registry.Bundle) Model {
+// visualMode is set by the root model based on the capability probe + --no-kitty.
+func New(bundle registry.Bundle, visualMode bool) Model {
 	stack := tui.NewStack()
 	return Model{
-		registry:  bundle,
-		stack:     stack,
-		layers:    newLayersModel(bundle, stack),
-		modal:     newUnknownModal(),
-		leftWidth: 24,
+		registry:   bundle,
+		stack:      stack,
+		layers:     newLayersModel(bundle, stack),
+		modal:      newUnknownModal(),
+		leftWidth:  24,
+		visualMode: visualMode,
 	}
 }
 
@@ -169,7 +174,8 @@ func (m Model) viewNarrow() string {
 }
 
 // renderDiagram produces the right-pane content. When the stack has no
-// selections yet, shows a help hint; otherwise renders the live diagram.
+// selections yet, shows a help hint; otherwise renders the live diagram
+// using the Kitty PNG renderer (visual mode) or the ANSI renderer (standard).
 func (m Model) renderDiagram(w, h int) string {
 	entries := m.stack.SelectedEntries(m.registry)
 	if len(entries) == 0 {
@@ -185,7 +191,20 @@ func (m Model) renderDiagram(w, h int) string {
 	}
 
 	layout := diagram.Compute(m.stack, m.registry, w, h-2)
-	body := diagram.RenderStandard(layout, m.frame)
+
+	var body string
+	if m.visualMode {
+		view, err := diagram.RenderKittyView(layout, m.frame, w, h-2)
+		if err != nil {
+			// Fall back to ANSI silently on any error — log would go to stderr
+			// but bubbletea owns stderr until exit, so just degrade the render.
+			body = diagram.RenderStandard(layout, m.frame)
+		} else {
+			body = view
+		}
+	} else {
+		body = diagram.RenderStandard(layout, m.frame)
+	}
 
 	var footer string
 	if m.readyToAdvance() {
