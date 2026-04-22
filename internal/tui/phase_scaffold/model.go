@@ -278,7 +278,29 @@ func (m Model) viewProgress() string {
 		b.WriteString("  ")
 		b.WriteString(theme.Dim.Render(fmt.Sprintf("output: %s", m.outDir)))
 		b.WriteString("\n\n")
+		b.WriteString(m.renderNextSteps())
+		b.WriteString("\n")
 		b.WriteString(theme.Dim.Render("q · quit"))
+	}
+	return b.String()
+}
+
+// renderNextSteps produces the actionable post-scaffold checklist.
+// Stack-aware — only shows commands that make sense for the selected techs.
+func (m Model) renderNextSteps() string {
+	steps := scaffold.NextSteps(m.outDir, m.stack, m.registry)
+	if len(steps) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(theme.Accent.Render("Next steps"))
+	b.WriteString("\n")
+	for _, s := range steps {
+		b.WriteString("  ")
+		b.WriteString(theme.Accent.Render("$ " + s.Command))
+		b.WriteString("\n    ")
+		b.WriteString(theme.Dim.Render(s.Note))
+		b.WriteString("\n")
 	}
 	return b.String()
 }
