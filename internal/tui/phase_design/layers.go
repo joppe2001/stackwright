@@ -265,14 +265,17 @@ func (m layersModel) View(w, h int) string {
 }
 
 // viewLayerList renders the two-line-per-layer left-pane navigator.
-// Layout per layer (pane width w, no trailing border):
+// Layout per layer (pane content width w):
 //
-//	●  Frontend                      ✓     <- dot + bold name + right-aligned tick
-//	   Next.js 14                         <- indented muted selected value
+//	▎ ● Frontend                      ✓     <- name line (dot + name + right tick)
+//	    Next.js 14                          <- value line (indented muted value)
 //
-// The selected row's name line is highlighted by swapping the name style
-// to accent-bold; a leading ▎ bar gives the row a visible cursor.
+// Layout math uses plain strings only — we apply styles to complete runs so
+// bubbletea's cell-width diff never splits an ANSI escape across columns.
 func (m layersModel) viewLayerList(w, h int) string {
+	if w < 10 {
+		w = 10 // lipgloss won't render a sane row narrower than this
+	}
 	var b strings.Builder
 	b.WriteString(theme.Accent.Render("stack layers"))
 	b.WriteString("\n\n")
@@ -282,76 +285,112 @@ func (m layersModel) viewLayerList(w, h int) string {
 		b.WriteString("\n")
 	}
 
-	// Leave a blank line, then the confirm button + key hints.
+	// Confirm button (only when advance is valid) + key hints.
 	b.WriteString("\n")
 	if m.canGenerate() {
-		b.WriteString(theme.Good.Render("  ↓ confirm & generate  "))
+		b.WriteString(theme.Good.Render("↓ confirm & generate"))
 		b.WriteString("\n\n")
 	}
 	b.WriteString(theme.Dim.Render("space open  ·  del clear"))
 	return fitToHeight(b.String(), h)
 }
 
-// renderLayerRow draws one two-line layer entry.
-// w is the pane inner width in cells; we right-align the tick and truncate
-// the selected value so nothing wraps.
+// renderLayerRow produces the two lines for one layer. Styles are applied
+// exclusively via lipgloss.NewStyle().Render(segment), with segments
+// concatenated by simple string addition — no styled spaces, no overlapping
+// styles. This stops bubbletea's diff-aware renderer from double-rendering
+// rows when terminal widths change.
 func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
 	selected := m.cursor == i
 	isSet := m.stack.IsSet(l)
 
-	// Left gutter: "▎ " for the selected row, "  " otherwise. Width 2.
-	gutter := "  "
+	// --- Line 1: name line ---
+	// Plain-string layout: `XX D N... T` where XX=cursor bar (2 chars),
+	// D=dot (1 char), N=name padded to (w-6), T=tick (1 char).
+
+	// Cursor bar: "▎ " when focused, "  " otherwise.
+	cursor := "  "
 	if selected {
-		gutter = theme.Accent.Render("▎ ")
+		cursor = "▎ "
 	}
 
-	// Colored dot — tech color when set, muted when not.
+	// Dot glyph — color applied below.
 	dotColor := theme.TextMuted
 	if isSet {
 		dotColor = m.layerDotColor(l)
 	}
-	dot := lipgloss.NewStyle().Foreground(lipgloss.Color(dotColor)).Render("●")
 
-	// Name: bold + accent when the row is focused; primary otherwise.
 	name := tui.LayerTitle(l)
-	nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.TextPrimary))
-	if selected {
-		nameStyle = nameStyle.Foreground(lipgloss.Color(theme.AccentPurple)).Bold(true)
+	// Reserve space for cursor(2) + dot(1) + space(1) + tick(1) + trailing space(1) = 6
+	nameField := w - 6
+	if nameField < 4 {
+		nameField = 4
+	}
+	if rn := []rune(name); len(rn) > nameField {
+		if nameField > 1 {
+			name = string(rn[:nameField-1]) + "…"
+		} else {
+			name = string(rn[:nameField])
+		}
+	}
+	// Pad the name to exactly nameField columns.
+	padding := nameField - runeCount(name)
+	if padding > 0 {
+		name = name + strings.Repeat(" ", padding)
 	}
 
-	// Tick or em-dash on the right edge.
-	tick := theme.Dim.Render(" ")
+	tickChar := " "
 	if isSet {
-		tick = theme.Good.Render("✓")
+		tickChar = "✓"
 	}
 
-	// Compute the padding that places the tick at column w-2.
-	// Layout is:  "gutter(2) dot(1) space(1) name  ...  tick(1)"
-	// Spaces between name and tick = w - 2 - 1 - 1 - nameLen - 1.
-	nameLen := lipgloss.Width(name)
-	pad := w - 2 - 1 - 1 - nameLen - 1
-	if pad < 1 {
-		pad = 1
+	// Compose the raw row, then apply colors to each segment.
+	// Styles:
+	//   cursor  -> accent when selected, plain otherwise
+	//   dot     -> dotColor
+	//   name    -> accent+bold when selected, primary otherwise
+	//   tick    -> teal if set, muted otherwise
+	var styledCursor, styledName string
+	if selected {
+		styledCursor = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentPurple)).Render(cursor)
+		styledName = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentPurple)).Bold(true).Render(name)
+	} else {
+		styledCursor = cursor
+		styledName = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.TextPrimary)).Render(name)
+	}
+	styledDot := lipgloss.NewStyle().Foreground(lipgloss.Color(dotColor)).Render("●")
+	var styledTick string
+	if isSet {
+		styledTick = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Teal)).Render(tickChar)
+	} else {
+		styledTick = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.TextMuted)).Render(tickChar)
 	}
 
-	line1 := gutter + dot + " " + nameStyle.Render(name) + strings.Repeat(" ", pad) + tick
+	line1 := styledCursor + styledDot + " " + styledName + " " + styledTick
 
-	// Second line: indented muted value, hard-truncated to w-4.
+	// --- Line 2: value line ---
+	// Plain "    value" left-padded to align under the name. Truncate to w-4.
 	value := m.selectedValueText(l)
 	maxVal := w - 4
 	if maxVal < 4 {
 		maxVal = 4
 	}
-	if lipgloss.Width(value) > maxVal {
-		runes := []rune(value)
-		if len(runes) > maxVal-1 {
-			value = string(runes[:maxVal-1]) + "…"
+	if rn := []rune(value); len(rn) > maxVal {
+		if maxVal > 1 {
+			value = string(rn[:maxVal-1]) + "…"
+		} else {
+			value = string(rn[:maxVal])
 		}
 	}
 	line2 := "    " + theme.LayerValueMuted.Render(value)
 
 	return line1 + "\n" + line2
 }
+
+// runeCount returns the display-cell count of a raw (un-styled) string.
+// For our layer names (plain ASCII) this equals len([]rune(s)); kept as a
+// helper so future i18n or emoji names still get measured correctly.
+func runeCount(s string) int { return len([]rune(s)) }
 
 // selectedValueText returns the muted second-line text for a layer.
 // Returns "not set" when empty and the human name of the selected tech otherwise.

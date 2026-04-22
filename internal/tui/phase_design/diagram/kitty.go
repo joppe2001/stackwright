@@ -75,8 +75,12 @@ func RenderPNG(layout Layout, frame int) (*image.RGBA, []byte, error) {
 // KittyGFXTransmit wraps a PNG payload in the chunked APC escape sequence
 // Kitty (and compatible terminals like Ghostty) interpret.
 //
-// The first chunk carries metadata (a=T, f=100); subsequent chunks carry
-// m=1 (more coming) or m=0 (last). Payloads are base64-encoded per the spec.
+// The first chunk carries metadata (a=T, f=100, C=1); subsequent chunks carry
+// m=1 (more coming) or m=0 (last). C=1 tells the terminal NOT to move the
+// cursor after displaying the image — critical when the image is part of a
+// bubbletea cell-grid view, otherwise following content gets pushed off-screen.
+// We also prepend "delete all images" so each frame replaces the previous one
+// instead of stacking.
 func KittyGFXTransmit(pngBytes []byte) string {
 	if len(pngBytes) == 0 {
 		return ""
@@ -84,9 +88,14 @@ func KittyGFXTransmit(pngBytes []byte) string {
 	encoded := base64.StdEncoding.EncodeToString(pngBytes)
 
 	var out bytes.Buffer
+
+	// Clear any previously-transmitted image so we don't get stale frames
+	// overlapping after resize or stack change. d=A means "delete all".
+	out.WriteString("\x1b_Ga=d,d=A\x1b\\")
+
 	// First chunk: include the metadata header.
-	// q=2 asks the terminal not to echo a response (we don't want stray text).
-	header := "a=T,f=100,q=2"
+	// q=2  = quiet (no response), C=1 = don't move cursor after display.
+	header := "a=T,f=100,q=2,C=1"
 	for i := 0; i < len(encoded); i += kittyChunkSize {
 		end := i + kittyChunkSize
 		if end > len(encoded) {
