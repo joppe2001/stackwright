@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"text/tabwriter"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/joppe2001/stackwright/internal/browser"
 	"github.com/joppe2001/stackwright/internal/registry"
 	"github.com/spf13/cobra"
 )
@@ -140,9 +139,10 @@ func shareLocalEntry(slug string) error {
 		url.QueryEscape(body),
 	)
 
-	if err := openInBrowser(issueURL); err != nil {
-		// Print the URL so the user can open it manually if the helper failed.
-		fmt.Fprintln(os.Stdout, "could not open browser; visit this URL manually:")
+	if err := browser.Open(issueURL); err != nil {
+		// Print the URL so the user can open it manually if every opener failed.
+		fmt.Fprintln(os.Stdout, "could not open browser:", err)
+		fmt.Fprintln(os.Stdout, "visit this URL manually:")
 		fmt.Fprintln(os.Stdout, issueURL)
 		return nil
 	}
@@ -170,19 +170,5 @@ func formatIssueBody(e registry.Entry) (string, error) {
 	return buf.String(), nil
 }
 
-// openInBrowser delegates to the OS "open URL" helper. On error the caller
-// falls back to printing the URL so the user can copy/paste.
-func openInBrowser(u string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", u)
-	case "linux":
-		cmd = exec.Command("xdg-open", u)
-	case "windows":
-		cmd = exec.Command("cmd", "/C", "start", "", u)
-	default:
-		return fmt.Errorf("no browser helper for %s", runtime.GOOS)
-	}
-	return cmd.Start()
-}
+// (openInBrowser removed — the shared internal/browser package handles
+// all platform strategies plus WSL and $BROWSER fallbacks.)

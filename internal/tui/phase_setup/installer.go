@@ -13,6 +13,7 @@ import (
 
 	"github.com/creack/pty"
 
+	"github.com/joppe2001/stackwright/internal/browser"
 	"github.com/joppe2001/stackwright/internal/registry"
 )
 
@@ -243,23 +244,11 @@ func extractIdentity(s string) string {
 }
 
 // OpenURL asks the OS to open the given URL in the user's default browser.
-// Fire-and-forget: we don't care about errors because the user can copy/paste.
-func OpenURL(url string) {
-	if url == "" {
-		return
-	}
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/C", "start", "", url)
-	default:
-		return
-	}
-	_ = cmd.Start()
+// Returns the error so callers can display "couldn't open — copy this URL"
+// instead of silently pretending. Platform strategy (macOS/Windows/Linux/WSL/
+// $BROWSER) lives in internal/browser.
+func OpenURL(url string) error {
+	return browser.Open(url)
 }
 
 // SetupOrder is the dependency-ordered tech list the wizard walks in sequence.

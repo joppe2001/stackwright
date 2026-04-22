@@ -47,6 +47,13 @@ type techProgress struct {
 	identity string
 	output   []string
 	errMsg   string
+
+	// browserStatus is set after the user presses `o` on the account prompt.
+	// Non-empty means feedback is pending display under the action row.
+	// "" = unset, otherwise e.g. "opened signup in your browser" or
+	// "couldn't open browser: …; copy the URL above manually".
+	browserStatus string
+	browserOK     bool
 }
 
 // maxOutputLines bounds how much streaming output we keep in memory per tech.
@@ -368,8 +375,14 @@ func (m Model) onKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case stAccountPrompt:
 		switch key {
 		case "o":
-			if it.entry.Account != nil {
-				OpenURL(it.entry.Account.SignupURL)
+			if it.entry.Account != nil && it.entry.Account.SignupURL != "" {
+				if err := OpenURL(it.entry.Account.SignupURL); err != nil {
+					it.browserOK = false
+					it.browserStatus = "couldn't open browser: " + err.Error()
+				} else {
+					it.browserOK = true
+					it.browserStatus = "opened signup page in your default browser"
+				}
 			}
 			return m, nil
 		case "enter":
@@ -526,11 +539,19 @@ func (m Model) renderDetail() string {
 			b.WriteString("\n\n")
 		}
 		if it.entry.Account != nil && it.entry.Account.SignupURL != "" {
-			b.WriteString("Signup: ")
+			b.WriteString("Signup URL (copy if browser doesn't open):\n  ")
 			b.WriteString(theme.Accent.Render(it.entry.Account.SignupURL))
 			b.WriteString("\n\n")
 		}
 		b.WriteString(actionRow("o Open signup", "enter I already have an account", "s Skip"))
+		if it.browserStatus != "" {
+			b.WriteString("\n\n")
+			if it.browserOK {
+				b.WriteString(theme.Good.Render("✓ " + it.browserStatus))
+			} else {
+				b.WriteString(theme.Accent.Render("✗ " + it.browserStatus))
+			}
+		}
 	case stAuthPrompt:
 		// When errMsg is set this is actually a retry-after-failure path.
 		// Lead with the error + last output so the user can see what went wrong.
