@@ -95,7 +95,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tui.PhaseChangeMsg:
-		return m.transition(msg.To), nil
+		next, cmd := m.transition(msg.To)
+		return next, cmd
 	}
 
 	// Route everything else to the active phase.
@@ -113,7 +114,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // transition advances to a new phase, copying the current stack forward.
 // Later phases are lazily constructed so they always see the latest stack.
-func (m rootModel) transition(to tui.Phase) rootModel {
+// Returns the new root model plus the phase's Init command so the child
+// can kick off any initial work (e.g., setup runs a CLI check immediately).
+func (m rootModel) transition(to tui.Phase) (rootModel, tea.Cmd) {
 	// Defensive: grab the design model's stack in case we somehow missed a
 	// StackUpdateMsg before the user pressed 'g'.
 	if ds := m.design.Stack(); ds.AppName != "" && (len(ds.Selections) > len(m.stack.Selections) || ds.AppName != m.stack.AppName) {
@@ -122,15 +125,18 @@ func (m rootModel) transition(to tui.Phase) rootModel {
 
 	m.phase = to
 	w, h := m.phaseArea()
+	var cmd tea.Cmd
 	switch to {
 	case tui.PhaseSetup:
 		m.setup = phase_setup.New(m.opts.Registry.Bundle, m.stack)
 		m.setup.SetSize(w, h)
+		cmd = m.setup.Init()
 	case tui.PhaseScaffold:
 		m.scaffold = phase_scaffold.New(m.opts.Registry.Bundle, m.stack)
 		m.scaffold.SetSize(w, h)
+		cmd = m.scaffold.Init()
 	}
-	return m
+	return m, cmd
 }
 
 func (m rootModel) View() string {
