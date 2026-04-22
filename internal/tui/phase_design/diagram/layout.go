@@ -133,15 +133,19 @@ func Compute(stack tui.Stack, bundle registry.Bundle, w, h int) Layout {
 		}
 	}
 
-	// Connections: for each pair of selected entries in different rows where
-	// one declares the other in compatible_with, emit an edge upper→lower.
+	// Connections: only adjacent logical rows (delta == 1), and cap the
+	// number of outgoing edges per upper node so dense stacks don't produce
+	// tangled lines. Prefer edges where the lower node is in the directly
+	// following row and the pair is mutually compatible (listed in both
+	// compatible_with arrays) — those read as "primary" relationships.
+	const maxOutPerNode = 2
+	outCount := make(map[int]int, len(nodes))
 	var conns []Connection
+
+	// Primary pass: adjacent-row, mutually compatible pairs.
 	for i, a := range nodes {
 		for j, b := range nodes {
 			if i >= j {
-				continue
-			}
-			if a.LogicalRow == b.LogicalRow {
 				continue
 			}
 			upper, lower := a, b
@@ -150,11 +154,13 @@ func Compute(stack tui.Stack, bundle registry.Bundle, w, h int) Layout {
 				upper, lower = b, a
 				upperIdx, lowerIdx = j, i
 			}
-			if !compatible(upper.Entry, lower.Entry) {
+			if lower.LogicalRow-upper.LogicalRow != 1 {
 				continue
 			}
-			// Only connect adjacent-ish logical rows; skip far jumps to avoid clutter.
-			if lower.LogicalRow-upper.LogicalRow > 2 {
+			if !mutuallyCompatible(upper.Entry, lower.Entry) {
+				continue
+			}
+			if outCount[upperIdx] >= maxOutPerNode {
 				continue
 			}
 			conns = append(conns, Connection{
@@ -163,6 +169,35 @@ func Compute(stack tui.Stack, bundle registry.Bundle, w, h int) Layout {
 				Color:   upper.Entry.DiagramColor,
 				Dashed:  isDataConnection(upper.Entry, lower.Entry),
 			})
+			outCount[upperIdx]++
+		}
+	}
+
+	// Secondary pass: nodes left with zero outgoing edges get one single-
+	// direction compatibility edge to an adjacent lower row, so every node
+	// visibly connects somewhere.
+	for i := range nodes {
+		if outCount[i] > 0 {
+			continue
+		}
+		for j, b := range nodes {
+			if j == i {
+				continue
+			}
+			if b.LogicalRow-nodes[i].LogicalRow != 1 {
+				continue
+			}
+			if !compatible(nodes[i].Entry, b.Entry) {
+				continue
+			}
+			conns = append(conns, Connection{
+				FromIdx: i,
+				ToIdx:   j,
+				Color:   nodes[i].Entry.DiagramColor,
+				Dashed:  isDataConnection(nodes[i].Entry, b.Entry),
+			})
+			outCount[i]++
+			break
 		}
 	}
 
@@ -184,6 +219,13 @@ func compatible(a, b registry.Entry) bool {
 		return true
 	}
 	return contains(b.CompatibleWith, a.Slug)
+}
+
+// mutuallyCompatible reports whether BOTH entries list each other. These
+// bidirectional pairs are the strongest "primary" relationships and get
+// priority in the connection layout.
+func mutuallyCompatible(a, b registry.Entry) bool {
+	return contains(a.CompatibleWith, b.Slug) && contains(b.CompatibleWith, a.Slug)
 }
 
 func contains(list []string, s string) bool {

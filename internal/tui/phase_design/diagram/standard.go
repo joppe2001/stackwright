@@ -202,8 +202,10 @@ func drawNode(c *canvas, n Node) {
 	}
 }
 
-// drawConnection traces a cubic bezier between two nodes' ports, draws a
-// handful of particles along it, and highlights both endpoints.
+// drawConnection traces a cubic bezier between two nodes' ports using
+// uniform dots — the dotted-curve aesthetic from the mockup. Mixed
+// box-drawing glyphs looked noisy and disconnected; dots read as a single
+// smooth path even on a low-DPI cell grid.
 func drawConnection(c *canvas, up, down Node, conn Connection, frame int) {
 	x1, y1 := up.BottomPort()
 	x2, y2 := down.TopPort()
@@ -216,45 +218,39 @@ func drawConnection(c *canvas, up, down Node, conn Connection, frame int) {
 	c1x, c1y := x1, y1+dy
 	c2x, c2y := x2, y2-dy
 
-	// Sample the curve. Dense sampling so multiple samples land in the same
-	// cell — we overwrite, which is fine.
-	samples := 40
-	points := make([][2]int, 0, samples)
+	// Dense sampling so overlapping samples in the same cell read continuously.
+	samples := 60
+	points := make([][2]int, 0, samples+1)
 	for i := 0; i <= samples; i++ {
 		t := float64(i) / float64(samples)
 		x, y := cubicBezier(t, x1, y1, c1x, c1y, c2x, c2y, x2, y2)
 		points = append(points, [2]int{x, y})
 	}
 
-	// Dashed connections skip every other sample group so gaps are visible.
+	// Dashed lines skip alternating groups; solid uses every sample.
 	for i, p := range points {
-		if conn.Dashed && (i/3)%2 == 1 {
+		if conn.Dashed && (i/4)%2 == 1 {
 			continue
 		}
-		glyph := glyphForDirection(points, i)
-		// Don't overwrite a node cell.
 		if isNodeCell(c, p[0], p[1]) {
 			continue
 		}
-		c.set(p[0], p[1], glyph, conn.Color, false)
+		c.set(p[0], p[1], '·', conn.Color, false)
 	}
 
-	// Endpoint ports — open circles matching the mockup's port rings.
+	// Endpoint port rings.
 	c.set(x1, y1, '○', conn.Color, false)
 	c.set(x2, y2, '○', conn.Color, false)
 
-	// Particles — 3 per connection, drifting along the curve over time.
-	for i := 0; i < 3; i++ {
-		phase := (frame + i*33) % 100
-		idx := int(float64(phase) / 100.0 * float64(len(points)))
-		if idx < 0 || idx >= len(points) {
-			continue
-		}
+	// A single travelling particle per connection — enough motion without
+	// the earlier 3-particle stack that made the path look busy.
+	phase := frame % 100
+	idx := int(float64(phase) / 100.0 * float64(len(points)))
+	if idx >= 0 && idx < len(points) {
 		px, py := points[idx][0], points[idx][1]
-		if isNodeCell(c, px, py) {
-			continue
+		if !isNodeCell(c, px, py) {
+			c.set(px, py, '●', conn.Color, false)
 		}
-		c.set(px, py, '●', conn.Color, false)
 	}
 }
 

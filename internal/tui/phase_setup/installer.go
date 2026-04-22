@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -57,6 +56,13 @@ type ptyHandle struct {
 // stdout and stderr are merged (PTY combines them naturally). Line breaks
 // are normalized to \n so downstream consumers don't have to care about
 // \r\n coming from Windows tools or raw \r from progress-bar CLIs.
+//
+// Important: we do NOT set SysProcAttr.Setpgid. creack/pty's Start() sets
+// Setsid=true and Setctty=true internally to give the child its own session
+// and controlling TTY; layering Setpgid on top of that triggered EPERM
+// ("operation not permitted") on macOS when the kernel tried to apply
+// both. Setsid already creates a fresh process group, so we have a clean
+// tree to kill via Cancel without needing Setpgid.
 func Start(ctx context.Context, command string) (*ProcessHandle, error) {
 	if command == "" {
 		return nil, errors.New("empty command")
@@ -65,10 +71,8 @@ func Start(ctx context.Context, command string) (*ProcessHandle, error) {
 	shell, shellArg := shellFor(runtime.GOOS)
 	subCtx, cancel := context.WithCancel(ctx)
 	cmd := exec.CommandContext(subCtx, shell, shellArg, command)
-	// Inherit PATH + everything: a brew install needs HOMEBREW_PREFIX etc.
+	// Inherit parent environment (PATH, HOMEBREW_PREFIX, CARGO_HOME, etc.).
 	cmd.Env = nil
-	// Separate process group so we can SIGKILL the whole tree on cancel.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -87,13 +91,23 @@ func Start(ctx context.Context, command string) (*ProcessHandle, error) {
 	return h, nil
 }
 
-// Cancel terminates the command's process group.
+// Cancel terminates the command.
 // Safe to call multiple times — each subsequent call is a no-op.
+//
+// Since we start the child under pty.Start() with Setsid=true, the child
+// leads its own session. SIGKILL on the direct child is enough on macOS/Linux
+// for the common case; if a misbehaving CLI double-forks a detached helper,
+// that helper may outlive us, but that's a tradeoff vs. the EPERM from
+// manual Setpgid. Closing the PTY also triggers SIGHUP on the session.
 func (h *ProcessHandle) Cancel() {
 	h.once.Do(func() {
-		if h.pty != nil && h.pty.cmd != nil && h.pty.cmd.Process != nil {
-			// Negative PID targets the whole group.
-			_ = syscall.Kill(-h.pty.cmd.Process.Pid, syscall.SIGKILL)
+		if h.pty != nil {
+			if h.pty.f != nil {
+				_ = h.pty.f.Close()
+			}
+			if h.pty.cmd != nil && h.pty.cmd.Process != nil {
+				_ = h.pty.cmd.Process.Kill()
+			}
 		}
 		if h.cancel != nil {
 			h.cancel()

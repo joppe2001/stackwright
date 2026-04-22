@@ -295,48 +295,52 @@ func (m layersModel) viewLayerList(w, h int) string {
 	return fitToHeight(b.String(), h)
 }
 
-// renderLayerRow produces the two lines for one layer. Styles are applied
-// exclusively via lipgloss.NewStyle().Render(segment), with segments
-// concatenated by simple string addition — no styled spaces, no overlapping
-// styles. This stops bubbletea's diff-aware renderer from double-rendering
-// rows when terminal widths change.
+// renderLayerRow produces the two lines for one layer. Every segment is
+// measured with lipgloss.Width (which respects the terminal's East-Asian-
+// ambiguous width setting) so a glyph like ● — which is 1 cell in most
+// Latin locales but 2 cells under Japanese — doesn't push the right-aligned
+// tick off the pane and onto a new line.
+//
+// Layout: [cursor][dot] [name_field] [tick]
 func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
 	selected := m.cursor == i
 	isSet := m.stack.IsSet(l)
 
-	// --- Line 1: name line ---
-	// Plain-string layout: `XX D N... T` where XX=cursor bar (2 chars),
-	// D=dot (1 char), N=name padded to (w-6), T=tick (1 char).
-
-	// Cursor bar: "▎ " when focused, "  " otherwise.
+	// Cursor bar: "▎ " when focused, "  " otherwise. Both should be 2 cells.
 	cursor := "  "
 	if selected {
 		cursor = "▎ "
 	}
+	cursorW := lipgloss.Width(cursor)
 
-	// Dot glyph — color applied below.
-	dotColor := theme.TextMuted
-	if isSet {
-		dotColor = m.layerDotColor(l)
-	}
+	// Use a 1-cell-safe ASCII bullet so the row stays tight on every locale.
+	// ● (U+25CF) is East-Asian-ambiguous and renders as 2 cells under Japanese
+	// locales, which was wrapping the ✓ onto its own line in Ghostty.
+	dotChar := "•"
+	dotW := lipgloss.Width(dotChar)
 
+	// Name text.
 	name := tui.LayerTitle(l)
-	// Reserve space for cursor(2) + dot(1) + space(1) + tick(1) + trailing space(1) = 6
-	nameField := w - 6
+	// Reserve: cursor + dot + 1 separator + name_field + 1 separator + tick(1).
+	nameField := w - cursorW - dotW - 1 - 1 - 1
 	if nameField < 4 {
 		nameField = 4
 	}
-	if rn := []rune(name); len(rn) > nameField {
-		if nameField > 1 {
-			name = string(rn[:nameField-1]) + "…"
-		} else {
-			name = string(rn[:nameField])
+	if rn := []rune(name); lipgloss.Width(name) > nameField {
+		// Byte-exact truncation first, then refine with width measurement.
+		cut := nameField - 1
+		if cut < 1 {
+			cut = 1
 		}
+		if cut > len(rn) {
+			cut = len(rn)
+		}
+		name = string(rn[:cut]) + "…"
 	}
-	// Pad the name to exactly nameField columns.
-	padding := nameField - runeCount(name)
-	if padding > 0 {
-		name = name + strings.Repeat(" ", padding)
+	// Pad to exact nameField cells.
+	pad := nameField - lipgloss.Width(name)
+	if pad > 0 {
+		name = name + strings.Repeat(" ", pad)
 	}
 
 	tickChar := " "
@@ -344,12 +348,12 @@ func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
 		tickChar = "✓"
 	}
 
-	// Compose the raw row, then apply colors to each segment.
-	// Styles:
-	//   cursor  -> accent when selected, plain otherwise
-	//   dot     -> dotColor
-	//   name    -> accent+bold when selected, primary otherwise
-	//   tick    -> teal if set, muted otherwise
+	// Color each segment independently. Raw whitespace stays unstyled to
+	// avoid stitching ANSI escapes across cell boundaries.
+	dotColor := theme.TextMuted
+	if isSet {
+		dotColor = m.layerDotColor(l)
+	}
 	var styledCursor, styledName string
 	if selected {
 		styledCursor = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentPurple)).Render(cursor)
@@ -358,7 +362,7 @@ func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
 		styledCursor = cursor
 		styledName = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.TextPrimary)).Render(name)
 	}
-	styledDot := lipgloss.NewStyle().Foreground(lipgloss.Color(dotColor)).Render("●")
+	styledDot := lipgloss.NewStyle().Foreground(lipgloss.Color(dotColor)).Render(dotChar)
 	var styledTick string
 	if isSet {
 		styledTick = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Teal)).Render(tickChar)
@@ -375,12 +379,16 @@ func (m layersModel) renderLayerRow(i int, l tui.Layer, w int) string {
 	if maxVal < 4 {
 		maxVal = 4
 	}
-	if rn := []rune(value); len(rn) > maxVal {
-		if maxVal > 1 {
-			value = string(rn[:maxVal-1]) + "…"
-		} else {
-			value = string(rn[:maxVal])
+	if lipgloss.Width(value) > maxVal {
+		rn := []rune(value)
+		cut := maxVal - 1
+		if cut < 1 {
+			cut = 1
 		}
+		if cut > len(rn) {
+			cut = len(rn)
+		}
+		value = string(rn[:cut]) + "…"
 	}
 	line2 := "    " + theme.LayerValueMuted.Render(value)
 
