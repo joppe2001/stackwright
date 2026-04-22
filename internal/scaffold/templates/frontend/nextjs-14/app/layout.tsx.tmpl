@@ -1,0 +1,18 @@
+{{- if .AuthEnabled}}import { ClerkProvider } from "@clerk/nextjs";
+{{end}}
+export const metadata = {
+  title: "{{.AppName}}",
+  description: "Built with stackwright.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  {{- if .AuthEnabled}}
+  return (
+    <ClerkProvider>
+      <html lang="en"><body>{children}</body></html>
+    </ClerkProvider>
+  );
+  {{- else}}
+  return (<html lang="en"><body>{children}</body></html>);
+  {{- end}}
+}

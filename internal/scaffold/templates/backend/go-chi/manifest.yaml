@@ -1,0 +1,10 @@
+files:
+  - src: go.mod.tmpl
+    dst: api/go.mod
+    merge: replace
+  - src: main.go.tmpl
+    dst: api/main.go
+    merge: replace
+  - src: .gitignore.tmpl
+    dst: .gitignore
+    merge: append

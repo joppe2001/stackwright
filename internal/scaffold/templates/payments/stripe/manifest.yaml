@@ -1,0 +1,7 @@
+files:
+  - src: stripe.ts.tmpl
+    dst: lib/stripe.ts
+    merge: replace
+  - src: env.sample.tmpl
+    dst: .env.sample
+    merge: append

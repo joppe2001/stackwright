@@ -1,0 +1,19 @@
+files:
+  - src: package.json.tmpl
+    dst: package.json
+    merge: merge-yaml
+  - src: tsconfig.json.tmpl
+    dst: tsconfig.json
+    merge: replace
+  - src: next.config.js.tmpl
+    dst: next.config.js
+    merge: replace
+  - src: app/layout.tsx.tmpl
+    dst: app/layout.tsx
+    merge: replace
+  - src: app/page.tsx.tmpl
+    dst: app/page.tsx
+    merge: replace
+  - src: .gitignore.tmpl
+    dst: .gitignore
+    merge: append

@@ -1,0 +1,7 @@
+files:
+  - src: redis.ts.tmpl
+    dst: lib/redis.ts
+    merge: replace
+  - src: env.sample.tmpl
+    dst: .env.sample
+    merge: append

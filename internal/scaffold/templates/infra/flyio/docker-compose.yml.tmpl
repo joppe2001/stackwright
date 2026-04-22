@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      PORT: "8080"
+{{- if eq (index .Stack "database") "postgres-16"}}
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/{{.DBName}}?sslmode=disable"
+    depends_on: [db]
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: {{.DBName}}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
+{{- end}}
