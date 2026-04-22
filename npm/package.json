@@ -1,0 +1,36 @@
+{
+  "name": "stackwright",
+  "version": "0.1.0",
+  "description": "Interactive full-stack project architecture builder",
+  "bin": {
+    "stackwright": "./bin/stackwright.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "os": ["darwin", "linux", "win32"],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "README.md"
+  ],
+  "keywords": [
+    "cli",
+    "tui",
+    "scaffold",
+    "architecture",
+    "fullstack"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joppe2001/stackwright.git"
+  },
+  "homepage": "https://github.com/joppe2001/stackwright#readme",
+  "bugs": {
+    "url": "https://github.com/joppe2001/stackwright/issues"
+  },
+  "license": "MIT"
+}

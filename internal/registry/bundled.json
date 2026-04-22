@@ -1,0 +1,668 @@
+{
+  "version": "1.0",
+  "entries": [
+    {
+      "name": "Next.js 14",
+      "slug": "nextjs-14",
+      "category": "frontend",
+      "description": "React framework with App Router, Server Components, and edge runtime",
+      "compatible_with": ["go-chi", "trpc", "clerk", "stripe", "vercel", "turborepo"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/nextjs-14.png",
+      "diagram_color": "#ffffff",
+      "docs_url": "https://nextjs.org/docs",
+      "cli": {
+        "binary": "npx",
+        "version_cmd": "npx --version",
+        "install": {
+          "macos":   "brew install node",
+          "linux":   "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs",
+          "windows": "winget install OpenJS.NodeJS"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "/** @type {import('next').NextConfig} */\nmodule.exports = {\n  reactStrictMode: true,\n  experimental: { serverActions: true }\n};\n",
+      "setup_steps": [
+        "Install dependencies: npm install",
+        "Start the dev server: npm run dev",
+        "Open http://localhost:3000 to verify"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Go + chi",
+      "slug": "go-chi",
+      "category": "backend",
+      "description": "Idiomatic Go HTTP server using the chi router and stdlib net/http",
+      "compatible_with": ["nextjs-14", "postgres-16", "upstash-redis", "clerk", "docker", "flyio", "railway"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/go-chi.png",
+      "diagram_color": "#00add8",
+      "docs_url": "https://go-chi.io/",
+      "cli": {
+        "binary": "go",
+        "version_cmd": "go version",
+        "install": {
+          "macos":   "brew install go",
+          "linux":   "sudo apt-get install -y golang",
+          "windows": "winget install GoLang.Go"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "package main\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/go-chi/chi/v5\"\n)\n\nfunc main() {\n\tr := chi.NewRouter()\n\tr.Get(\"/healthz\", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(\"ok\")) })\n\thttp.ListenAndServe(\":8080\", r)\n}\n",
+      "setup_steps": [
+        "go mod init <module-path>",
+        "go get github.com/go-chi/chi/v5",
+        "go run ."
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "PostgreSQL 16",
+      "slug": "postgres-16",
+      "category": "database",
+      "description": "Open-source relational database with JSONB, full-text search, and partitioning",
+      "compatible_with": ["go-chi", "nextjs-14", "prisma", "drizzle", "supabase", "neon"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/postgres-16.png",
+      "diagram_color": "#6aa2ce",
+      "docs_url": "https://www.postgresql.org/docs/16/",
+      "cli": {
+        "binary": "psql",
+        "version_cmd": "psql --version",
+        "install": {
+          "macos":   "brew install postgresql@16",
+          "linux":   "sudo apt-get install -y postgresql-16",
+          "windows": "winget install PostgreSQL.PostgreSQL"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "CREATE TABLE users (\n  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  email      text UNIQUE NOT NULL,\n  created_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "setup_steps": [
+        "Start the server: brew services start postgresql@16  (macOS)",
+        "Create a database: createdb {{.AppName}}",
+        "Connect: psql {{.AppName}}"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Upstash Redis",
+      "slug": "upstash-redis",
+      "category": "cache",
+      "description": "Serverless Redis with HTTP/REST access and global replication",
+      "compatible_with": ["nextjs-14", "go-chi", "vercel", "flyio"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/upstash-redis.png",
+      "diagram_color": "#00e9a3",
+      "docs_url": "https://docs.upstash.com/redis",
+      "cli": null,
+      "account": {
+        "required": true,
+        "signup_url": "https://console.upstash.com/",
+        "note": "Free tier includes 10,000 commands/day. No credit card required."
+      },
+      "auth": { "required": false },
+      "boilerplate_snippet": "import { Redis } from '@upstash/redis';\nexport const redis = Redis.fromEnv();\n",
+      "setup_steps": [
+        "Create a Redis database at console.upstash.com",
+        "Copy UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN into .env",
+        "npm install @upstash/redis"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Clerk",
+      "slug": "clerk",
+      "category": "auth",
+      "description": "Drop-in authentication with session, user, and org management",
+      "compatible_with": ["nextjs-14", "go-chi", "trpc"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/clerk.png",
+      "diagram_color": "#6c47ff",
+      "docs_url": "https://clerk.com/docs",
+      "cli": null,
+      "account": {
+        "required": true,
+        "signup_url": "https://dashboard.clerk.com/sign-up",
+        "note": "Free tier: 10,000 monthly active users. Paid plans for advanced features."
+      },
+      "auth": { "required": false },
+      "boilerplate_snippet": "import { ClerkProvider } from '@clerk/nextjs';\nexport default function RootLayout({ children }) {\n  return (<ClerkProvider><html><body>{children}</body></html></ClerkProvider>);\n}\n",
+      "setup_steps": [
+        "Create an application in the Clerk dashboard",
+        "Copy NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY into .env.local",
+        "npm install @clerk/nextjs"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Stripe",
+      "slug": "stripe",
+      "category": "payments",
+      "description": "Payments, subscriptions, and billing with webhook-driven event model",
+      "compatible_with": ["nextjs-14", "go-chi", "clerk"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/stripe.png",
+      "diagram_color": "#635bff",
+      "docs_url": "https://stripe.com/docs",
+      "cli": {
+        "binary": "stripe",
+        "version_cmd": "stripe --version",
+        "install": {
+          "macos":   "brew install stripe/stripe-cli/stripe",
+          "linux":   "curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg && echo 'deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main' | sudo tee /etc/apt/sources.list.d/stripe.list && sudo apt update && sudo apt install -y stripe",
+          "windows": "scoop bucket add stripe https://github.com/stripe/scoop-stripe-cli.git && scoop install stripe"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://dashboard.stripe.com/register",
+        "note": "Stripe requires business details to activate live mode. Test mode works without verification."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "stripe login",
+        "verify_cmd": "stripe config --list",
+        "verify_success_pattern": "test_mode_api_key",
+        "opens_browser": true,
+        "note": "Opens your browser to authorize the Stripe CLI against your account."
+      },
+      "boilerplate_snippet": "import Stripe from 'stripe';\nexport const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });\n",
+      "setup_steps": [
+        "Install the Stripe CLI and run `stripe login`",
+        "Forward webhooks locally: `stripe listen --forward-to localhost:3000/api/webhooks`",
+        "Copy STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET into .env.local"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Docker",
+      "slug": "docker",
+      "category": "infra",
+      "description": "Containerize services for local development and deployment",
+      "compatible_with": ["go-chi", "nextjs-14", "postgres-16", "flyio", "railway", "github-actions"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/docker.png",
+      "diagram_color": "#2496ed",
+      "docs_url": "https://docs.docker.com/",
+      "cli": {
+        "binary": "docker",
+        "version_cmd": "docker --version",
+        "install": {
+          "macos":   "brew install --cask docker",
+          "linux":   "curl -fsSL https://get.docker.com | sh",
+          "windows": "winget install Docker.DockerDesktop"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "FROM golang:1.22-alpine AS build\nWORKDIR /src\nCOPY . .\nRUN go build -o /out/app ./...\nFROM gcr.io/distroless/base-debian12\nCOPY --from=build /out/app /app\nENTRYPOINT [\"/app\"]\n",
+      "setup_steps": [
+        "Start Docker Desktop (macOS/Windows) or the dockerd service (Linux)",
+        "Build the image: docker build -t {{.AppName}} .",
+        "Run: docker run --rm -p 8080:8080 {{.AppName}}"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Fly.io",
+      "slug": "flyio",
+      "category": "infra",
+      "description": "Edge deployment platform with global anycast routing",
+      "compatible_with": ["go-chi", "nextjs-14", "postgres-16", "upstash-redis", "docker"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/flyio.png",
+      "diagram_color": "#a78bfa",
+      "docs_url": "https://fly.io/docs/",
+      "cli": {
+        "binary": "flyctl",
+        "version_cmd": "flyctl version",
+        "install": {
+          "macos":   "brew install flyctl",
+          "linux":   "curl -L https://fly.io/install.sh | sh",
+          "windows": "pwsh -c \"iwr https://fly.io/install.ps1 -useb | iex\""
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://fly.io/app/sign-up",
+        "note": "Free tier available. No credit card required for hobby projects."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "flyctl auth login",
+        "verify_cmd": "flyctl auth whoami",
+        "verify_success_pattern": "@",
+        "opens_browser": true,
+        "note": "This will open your browser to complete authentication."
+      },
+      "boilerplate_snippet": "app = \"{{.AppName}}\"\nprimary_region = \"iad\"\n[http_service]\n  internal_port = 8080\n  force_https = true\n",
+      "setup_steps": [
+        "Run `flyctl launch --no-deploy` to initialise your app",
+        "Set secrets: `flyctl secrets set KEY=value`",
+        "Deploy: `flyctl deploy`"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Vercel",
+      "slug": "vercel",
+      "category": "infra",
+      "description": "Frontend platform with global edge network and preview deploys per PR",
+      "compatible_with": ["nextjs-14", "upstash-redis", "clerk", "stripe", "turborepo"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/vercel.png",
+      "diagram_color": "#888888",
+      "docs_url": "https://vercel.com/docs",
+      "cli": {
+        "binary": "vercel",
+        "version_cmd": "vercel --version",
+        "install": {
+          "macos":   "npm install -g vercel",
+          "linux":   "npm install -g vercel",
+          "windows": "npm install -g vercel"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://vercel.com/signup",
+        "note": "Free hobby tier available. Pro plans for teams and higher limits."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "vercel login",
+        "verify_cmd": "vercel whoami",
+        "verify_success_pattern": "",
+        "opens_browser": true,
+        "note": "Opens your browser to authorize the Vercel CLI."
+      },
+      "boilerplate_snippet": "{\n  \"buildCommand\": \"next build\",\n  \"framework\": \"nextjs\"\n}\n",
+      "setup_steps": [
+        "Run `vercel` and link the project to your Vercel account",
+        "Set env vars: `vercel env add <NAME>`",
+        "Deploy: `vercel --prod`"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Supabase",
+      "slug": "supabase",
+      "category": "database",
+      "description": "Hosted Postgres with auth, realtime, storage, and edge functions",
+      "compatible_with": ["nextjs-14", "go-chi", "vercel"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/supabase.png",
+      "diagram_color": "#3ecf8e",
+      "docs_url": "https://supabase.com/docs",
+      "cli": {
+        "binary": "supabase",
+        "version_cmd": "supabase --version",
+        "install": {
+          "macos":   "brew install supabase/tap/supabase",
+          "linux":   "curl -fsSL https://supabase.com/install.sh | sh",
+          "windows": "scoop bucket add supabase https://github.com/supabase/scoop-bucket.git && scoop install supabase"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://supabase.com/dashboard/sign-up",
+        "note": "Free tier: 2 projects, 500MB database each."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "supabase login",
+        "verify_cmd": "supabase projects list",
+        "verify_success_pattern": "",
+        "opens_browser": true,
+        "note": "Opens your browser to generate an access token."
+      },
+      "boilerplate_snippet": "import { createClient } from '@supabase/supabase-js';\nexport const supabase = createClient(\n  process.env.NEXT_PUBLIC_SUPABASE_URL,\n  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY\n);\n",
+      "setup_steps": [
+        "Create a project at supabase.com/dashboard",
+        "supabase init  (in your repo)",
+        "supabase link --project-ref <ref>"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "PlanetScale",
+      "slug": "planetscale",
+      "category": "database",
+      "description": "Serverless MySQL with branch-per-PR workflow and non-blocking schema changes",
+      "compatible_with": ["nextjs-14", "go-chi", "prisma", "drizzle", "vercel"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/planetscale.png",
+      "diagram_color": "#b8dff0",
+      "docs_url": "https://planetscale.com/docs",
+      "cli": {
+        "binary": "pscale",
+        "version_cmd": "pscale --version",
+        "install": {
+          "macos":   "brew install planetscale/tap/pscale",
+          "linux":   "curl -fsSL https://github.com/planetscale/cli/releases/latest/download/pscale_linux_amd64.tar.gz | tar -xz -C /usr/local/bin pscale",
+          "windows": "scoop bucket add pscale https://github.com/planetscale/scoop-bucket.git && scoop install pscale"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://auth.planetscale.com/sign-up",
+        "note": "Scaler plan required for new accounts (no free tier)."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "pscale auth login",
+        "verify_cmd": "pscale auth check",
+        "verify_success_pattern": "",
+        "opens_browser": true,
+        "note": "Opens your browser to confirm the CLI login."
+      },
+      "boilerplate_snippet": "DATABASE_URL=\"mysql://user:pass@host/{{.AppName}}?ssl={\\\"rejectUnauthorized\\\":true}\"\n",
+      "setup_steps": [
+        "Create a database: pscale database create {{.AppName}}",
+        "Create a branch: pscale branch create {{.AppName}} main",
+        "Get a connection string: pscale password create {{.AppName}} main app"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Prisma",
+      "slug": "prisma",
+      "category": "service",
+      "description": "Type-safe database ORM with migrations, generated client, and Studio",
+      "compatible_with": ["nextjs-14", "postgres-16", "planetscale", "supabase", "neon"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/prisma.png",
+      "diagram_color": "#5a67d8",
+      "docs_url": "https://www.prisma.io/docs",
+      "cli": {
+        "binary": "npx",
+        "version_cmd": "npx prisma --version",
+        "install": {
+          "macos":   "npm install -D prisma @prisma/client",
+          "linux":   "npm install -D prisma @prisma/client",
+          "windows": "npm install -D prisma @prisma/client"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "generator client { provider = \"prisma-client-js\" }\ndatasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") }\nmodel User { id String @id @default(cuid()) email String @unique }\n",
+      "setup_steps": [
+        "Initialize: npx prisma init",
+        "Edit schema.prisma, then run: npx prisma migrate dev --name init",
+        "Generate client: npx prisma generate"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Drizzle",
+      "slug": "drizzle",
+      "category": "service",
+      "description": "TypeScript-first SQL query builder and lightweight ORM",
+      "compatible_with": ["nextjs-14", "postgres-16", "planetscale", "neon"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/drizzle.png",
+      "diagram_color": "#c5f74f",
+      "docs_url": "https://orm.drizzle.team/docs/overview",
+      "cli": {
+        "binary": "npx",
+        "version_cmd": "npx drizzle-kit --version",
+        "install": {
+          "macos":   "npm install drizzle-orm && npm install -D drizzle-kit",
+          "linux":   "npm install drizzle-orm && npm install -D drizzle-kit",
+          "windows": "npm install drizzle-orm && npm install -D drizzle-kit"
+        }
+      },
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';\nexport const users = pgTable('users', {\n  id: uuid('id').primaryKey().defaultRandom(),\n  email: text('email').notNull().unique(),\n  createdAt: timestamp('created_at').defaultNow().notNull()\n});\n",
+      "setup_steps": [
+        "Create drizzle.config.ts pointing at your schema",
+        "Generate migrations: npx drizzle-kit generate",
+        "Apply: npx drizzle-kit migrate"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "tRPC",
+      "slug": "trpc",
+      "category": "service",
+      "description": "End-to-end type-safe RPC between server and client without codegen",
+      "compatible_with": ["nextjs-14", "clerk", "prisma", "drizzle"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/trpc.png",
+      "diagram_color": "#398ccb",
+      "docs_url": "https://trpc.io/docs",
+      "cli": null,
+      "account": { "required": false },
+      "auth":    { "required": false },
+      "boilerplate_snippet": "import { initTRPC } from '@trpc/server';\nconst t = initTRPC.create();\nexport const router = t.router;\nexport const publicProcedure = t.procedure;\n",
+      "setup_steps": [
+        "npm install @trpc/server @trpc/client @trpc/next zod",
+        "Create /server/trpc.ts with initTRPC and routers",
+        "Mount the handler in /app/api/trpc/[trpc]/route.ts"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Turborepo",
+      "slug": "turborepo",
+      "category": "service",
+      "description": "Monorepo build system with remote caching and parallel task execution",
+      "compatible_with": ["nextjs-14", "vercel", "github-actions"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/turborepo.png",
+      "diagram_color": "#ff1d8c",
+      "docs_url": "https://turbo.build/repo/docs",
+      "cli": {
+        "binary": "turbo",
+        "version_cmd": "turbo --version",
+        "install": {
+          "macos":   "npm install -g turbo",
+          "linux":   "npm install -g turbo",
+          "windows": "npm install -g turbo"
+        }
+      },
+      "account": {
+        "required": false,
+        "signup_url": "https://vercel.com/signup",
+        "note": "Remote caching (optional) is served by Vercel — sign in with `turbo login` to enable."
+      },
+      "auth": { "required": false },
+      "boilerplate_snippet": "{\n  \"$schema\": \"https://turbo.build/schema.json\",\n  \"pipeline\": {\n    \"build\":   { \"dependsOn\": [\"^build\"], \"outputs\": [\"dist/**\", \".next/**\"] },\n    \"lint\":    {},\n    \"test\":    { \"dependsOn\": [\"build\"] },\n    \"dev\":     { \"cache\": false, \"persistent\": true }\n  }\n}\n",
+      "setup_steps": [
+        "npm install -D turbo",
+        "Create turbo.json at the repo root",
+        "Run tasks: turbo run build"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "GitHub Actions",
+      "slug": "github-actions",
+      "category": "cicd",
+      "description": "CI/CD pipelines triggered by repo events with hosted runners",
+      "compatible_with": ["nextjs-14", "go-chi", "docker", "vercel", "flyio", "railway", "turborepo"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/github-actions.png",
+      "diagram_color": "#2088ff",
+      "docs_url": "https://docs.github.com/en/actions",
+      "cli": {
+        "binary": "gh",
+        "version_cmd": "gh --version",
+        "install": {
+          "macos":   "brew install gh",
+          "linux":   "sudo apt-get install -y gh",
+          "windows": "winget install GitHub.cli"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://github.com/signup",
+        "note": "A GitHub account is needed to push the repo and trigger Actions."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "gh auth login",
+        "verify_cmd": "gh auth status",
+        "verify_success_pattern": "Logged in",
+        "opens_browser": true,
+        "note": "Opens your browser (or prints a device code) to authorize the CLI."
+      },
+      "boilerplate_snippet": "name: ci\non: { push: { branches: [main] }, pull_request: {} }\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with: { node-version: '20', cache: 'npm' }\n      - run: npm ci\n      - run: npm run build\n",
+      "setup_steps": [
+        "Push the repo to GitHub",
+        "Commit workflow files under .github/workflows/",
+        "Add secrets in Settings → Secrets and variables → Actions"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Railway",
+      "slug": "railway",
+      "category": "infra",
+      "description": "Infrastructure platform that deploys apps + databases from your git repo",
+      "compatible_with": ["go-chi", "nextjs-14", "postgres-16", "docker"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/railway.png",
+      "diagram_color": "#8b5cf6",
+      "docs_url": "https://docs.railway.app",
+      "cli": {
+        "binary": "railway",
+        "version_cmd": "railway --version",
+        "install": {
+          "macos":   "brew install railway",
+          "linux":   "curl -fsSL https://railway.app/install.sh | sh",
+          "windows": "npm install -g @railway/cli"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://railway.app/login",
+        "note": "Trial includes $5 of usage; pay-as-you-go afterward."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "railway login",
+        "verify_cmd": "railway whoami",
+        "verify_success_pattern": "",
+        "opens_browser": true,
+        "note": "Opens your browser to authorize the Railway CLI."
+      },
+      "boilerplate_snippet": "# railway.toml\n[build]\nbuilder = \"NIXPACKS\"\n\n[deploy]\nstartCommand = \"./app\"\nrestartPolicyType = \"ON_FAILURE\"\n",
+      "setup_steps": [
+        "Link the project: railway link",
+        "Set variables: railway variables --set KEY=value",
+        "Deploy: railway up"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Neon",
+      "slug": "neon",
+      "category": "database",
+      "description": "Serverless Postgres with branching, autoscaling, and scale-to-zero",
+      "compatible_with": ["nextjs-14", "go-chi", "prisma", "drizzle", "vercel"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/neon.png",
+      "diagram_color": "#00e699",
+      "docs_url": "https://neon.tech/docs",
+      "cli": {
+        "binary": "neonctl",
+        "version_cmd": "neonctl --version",
+        "install": {
+          "macos":   "npm install -g neonctl",
+          "linux":   "npm install -g neonctl",
+          "windows": "npm install -g neonctl"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://console.neon.tech/signup",
+        "note": "Free tier: 1 project, 0.5 GB storage, always-on."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "neonctl auth",
+        "verify_cmd": "neonctl me",
+        "verify_success_pattern": "",
+        "opens_browser": true,
+        "note": "Opens your browser for OAuth."
+      },
+      "boilerplate_snippet": "DATABASE_URL=\"postgres://user:pass@ep-xxx.neon.tech/{{.AppName}}?sslmode=require\"\n",
+      "setup_steps": [
+        "Create a project: neonctl projects create --name {{.AppName}}",
+        "Grab the connection string: neonctl connection-string",
+        "Add DATABASE_URL to .env.local"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "Resend",
+      "slug": "resend",
+      "category": "service",
+      "description": "Transactional email API for developers with React email templates",
+      "compatible_with": ["nextjs-14", "go-chi", "clerk"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/resend.png",
+      "diagram_color": "#ffffff",
+      "docs_url": "https://resend.com/docs",
+      "cli": null,
+      "account": {
+        "required": true,
+        "signup_url": "https://resend.com/signup",
+        "note": "Free tier: 3,000 emails/month and 100/day. Domain verification required to send."
+      },
+      "auth": { "required": false },
+      "boilerplate_snippet": "import { Resend } from 'resend';\nexport const resend = new Resend(process.env.RESEND_API_KEY);\n",
+      "setup_steps": [
+        "Create an API key in the Resend dashboard",
+        "Verify your sending domain under Domains",
+        "npm install resend"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    },
+    {
+      "name": "AWS S3",
+      "slug": "aws-s3",
+      "category": "service",
+      "description": "Object storage for uploads, static assets, and backups",
+      "compatible_with": ["go-chi", "nextjs-14"],
+      "logo_url": "https://raw.githubusercontent.com/joppe2001/stackwright-registry/main/logos/aws-s3.png",
+      "diagram_color": "#ff9900",
+      "docs_url": "https://docs.aws.amazon.com/s3/",
+      "cli": {
+        "binary": "aws",
+        "version_cmd": "aws --version",
+        "install": {
+          "macos":   "brew install awscli",
+          "linux":   "curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip && unzip -q /tmp/awscliv2.zip -d /tmp && sudo /tmp/aws/install",
+          "windows": "winget install Amazon.AWSCLI"
+        }
+      },
+      "account": {
+        "required": true,
+        "signup_url": "https://portal.aws.amazon.com/billing/signup",
+        "note": "AWS requires a credit card. Free tier includes 5 GB of S3 storage for 12 months."
+      },
+      "auth": {
+        "required": true,
+        "cmd": "aws configure",
+        "verify_cmd": "aws sts get-caller-identity",
+        "verify_success_pattern": "Account",
+        "opens_browser": false,
+        "note": "Interactive prompt for your Access Key ID, Secret Access Key, region, and output format."
+      },
+      "boilerplate_snippet": "import { S3Client } from '@aws-sdk/client-s3';\nexport const s3 = new S3Client({ region: process.env.AWS_REGION });\n",
+      "setup_steps": [
+        "Create an S3 bucket: aws s3 mb s3://{{.AppName}}-assets",
+        "Set a bucket policy for read or presigned-URL access",
+        "Add AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY to .env"
+      ],
+      "added_by": "bundled",
+      "verified": true
+    }
+  ]
+}
