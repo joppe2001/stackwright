@@ -156,7 +156,18 @@ func (m rootModel) View() string {
 	case tui.PhaseScaffold:
 		body = m.scaffold.View()
 	}
-	return lipgloss.JoinVertical(lipgloss.Left,
+
+	// When visual mode is active and we're NOT in the design phase, make
+	// sure any lingering Kitty images from the design phase are cleared.
+	// The design phase prepends this same escape on every transmission, so
+	// we only need to guard the other phases. a=d,d=A deletes all images.
+	// Cheap (~8 bytes per frame) and harmless when no images are resident.
+	prefix := ""
+	if m.phase != tui.PhaseDesign && m.opts.Capabilities.VisualMode(m.opts.NoKitty) {
+		prefix = "\x1b_Ga=d,d=A\x1b\\"
+	}
+
+	return prefix + lipgloss.JoinVertical(lipgloss.Left,
 		m.renderTitleBar(),
 		body,
 		m.renderStatusBar(),
