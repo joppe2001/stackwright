@@ -3,7 +3,11 @@ import type { Config } from "drizzle-kit";
 export default {
   schema: "./db/schema.ts",
   out: "./db/migrations",
+  {{- if eq (index .Stack "database") "planetscale"}}
+  dialect: "mysql",
+  {{- else}}
   dialect: "postgresql",
+  {{- end}}
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },

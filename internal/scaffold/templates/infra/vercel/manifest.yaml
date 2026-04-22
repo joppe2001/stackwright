@@ -1,0 +1,7 @@
+files:
+  - src: vercel.json.tmpl
+    dst: vercel.json
+    merge: replace
+  - src: .vercelignore.tmpl
+    dst: .vercelignore
+    merge: append

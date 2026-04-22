@@ -431,6 +431,7 @@ func (m Model) progressBar() string {
 
 func (m Model) renderItemRow(i int, it techProgress) string {
 	mark, status := " ", ""
+	statusStyle := theme.Dim
 	switch it.state {
 	case stDone:
 		mark = theme.Good.Render("✓")
@@ -447,6 +448,12 @@ func (m Model) renderItemRow(i int, it techProgress) string {
 	case stPending:
 		mark = theme.Dim.Render("·")
 		status = "waiting"
+	case stInstallFailed:
+		// Keep failed items visually distinct even after the user scrolls past
+		// them on the active row — they might want to come back and retry.
+		mark = theme.Accent.Render("!")
+		status = "install failed · press y to retry"
+		statusStyle = theme.Accent
 	default:
 		if i == m.cur {
 			mark = theme.Accent.Render("▶")
@@ -459,7 +466,7 @@ func (m Model) renderItemRow(i int, it techProgress) string {
 	return fmt.Sprintf("  %s  %-18s  %s",
 		mark,
 		truncate(it.entry.Name, 18),
-		theme.Dim.Render(status),
+		statusStyle.Render(status),
 	)
 }
 
@@ -493,15 +500,26 @@ func (m Model) renderDetail() string {
 		b.WriteString("\n\n")
 		b.WriteString(renderOutput(it.output))
 	case stInstallFailed:
-		b.WriteString(theme.Accent.Render("install failed"))
+		b.WriteString(theme.Accent.Render("✗ install failed"))
+		b.WriteString("\n")
 		if it.errMsg != "" {
 			b.WriteString("  ")
 			b.WriteString(theme.Dim.Render(it.errMsg))
+			b.WriteString("\n")
 		}
-		b.WriteString("\n\n")
-		b.WriteString(renderOutput(it.output))
+		b.WriteString("\n")
+		if len(it.output) > 0 {
+			b.WriteString(theme.Dim.Render("last output (most recent 8 lines):"))
+			b.WriteString("\n")
+			b.WriteString(renderOutput(it.output))
+		} else {
+			b.WriteString(theme.Dim.Render("(no output captured — the command may have failed before starting)"))
+			b.WriteString("\n")
+		}
 		b.WriteString("\n")
 		b.WriteString(actionRow("y Retry", "s Skip", "r Remove from stack"))
+		b.WriteString("\n")
+		b.WriteString(theme.Dim.Render("Retry re-runs the install command as-is. If it keeps failing, try the command manually in another terminal to see the full error."))
 	case stAccountPrompt:
 		if it.entry.Account != nil && it.entry.Account.Note != "" {
 			b.WriteString(it.entry.Account.Note)
@@ -514,6 +532,20 @@ func (m Model) renderDetail() string {
 		}
 		b.WriteString(actionRow("o Open signup", "enter I already have an account", "s Skip"))
 	case stAuthPrompt:
+		// When errMsg is set this is actually a retry-after-failure path.
+		// Lead with the error + last output so the user can see what went wrong.
+		if it.errMsg != "" {
+			b.WriteString(theme.Accent.Render("✗ previous auth attempt failed"))
+			b.WriteString("\n  ")
+			b.WriteString(theme.Dim.Render(it.errMsg))
+			b.WriteString("\n\n")
+			if len(it.output) > 0 {
+				b.WriteString(theme.Dim.Render("last output:"))
+				b.WriteString("\n")
+				b.WriteString(renderOutput(it.output))
+				b.WriteString("\n")
+			}
+		}
 		if it.entry.Auth != nil {
 			if it.entry.Auth.Note != "" {
 				b.WriteString(it.entry.Auth.Note)
@@ -524,10 +556,10 @@ func (m Model) renderDetail() string {
 			b.WriteString("\n\n")
 		}
 		if it.errMsg != "" {
-			b.WriteString(theme.Accent.Render(it.errMsg))
-			b.WriteString("\n\n")
+			b.WriteString(actionRow("y Retry auth", "s Skip"))
+		} else {
+			b.WriteString(actionRow("y Run auth", "s Skip"))
 		}
-		b.WriteString(actionRow("y Run auth", "s Skip"))
 	case stAuthRunning:
 		b.WriteString(theme.Dim.Render("Running auth — may open a browser…"))
 		b.WriteString("\n\n")
@@ -576,10 +608,23 @@ func renderOutput(lines []string) string {
 	return b.String()
 }
 
+// actionRow renders a row of "[key] Label" buttons. Input strings are
+// "<key> <label>" pairs — the key is highlighted in accent, the label in
+// primary text, and the brackets in muted so the key stands out as tappable.
 func actionRow(actions ...string) string {
 	parts := make([]string, 0, len(actions))
 	for _, a := range actions {
-		parts = append(parts, theme.Accent.Render("["+a+"]"))
+		key, label, found := strings.Cut(a, " ")
+		if !found {
+			parts = append(parts, theme.Accent.Render("["+a+"]"))
+			continue
+		}
+		parts = append(parts,
+			theme.Dim.Render("[")+
+				theme.Accent.Render(key)+
+				theme.Dim.Render("]")+
+				" "+label,
+		)
 	}
 	return strings.Join(parts, "   ")
 }

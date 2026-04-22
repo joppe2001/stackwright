@@ -1,6 +1,6 @@
 files:
-  - src: init.sql.tmpl
-    dst: db/init.sql
+  - src: supabase.ts.tmpl
+    dst: lib/supabase.ts
     merge: replace
   - src: env.sample.tmpl
     dst: .env.sample

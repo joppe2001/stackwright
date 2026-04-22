@@ -1,6 +1,6 @@
 files:
-  - src: init.sql.tmpl
-    dst: db/init.sql
+  - src: resend.ts.tmpl
+    dst: lib/resend.ts
     merge: replace
   - src: env.sample.tmpl
     dst: .env.sample

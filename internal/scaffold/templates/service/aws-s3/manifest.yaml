@@ -1,6 +1,6 @@
 files:
-  - src: init.sql.tmpl
-    dst: db/init.sql
+  - src: s3.ts.tmpl
+    dst: lib/s3.ts
     merge: replace
   - src: env.sample.tmpl
     dst: .env.sample

@@ -1,0 +1,10 @@
+files:
+  - src: schema.prisma.tmpl
+    dst: prisma/schema.prisma
+    merge: replace
+  - src: db.ts.tmpl
+    dst: lib/db.ts
+    merge: replace
+  - src: env.sample.tmpl
+    dst: .env.sample
+    merge: append

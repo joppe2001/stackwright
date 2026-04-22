@@ -1,0 +1,4 @@
+files:
+  - src: railway.toml.tmpl
+    dst: railway.toml
+    merge: replace

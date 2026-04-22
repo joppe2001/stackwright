@@ -1,0 +1,13 @@
+files:
+  - src: trpc.ts.tmpl
+    dst: server/trpc.ts
+    merge: replace
+  - src: router.ts.tmpl
+    dst: server/router.ts
+    merge: replace
+  - src: route.ts.tmpl
+    dst: app/api/trpc/[trpc]/route.ts
+    merge: replace
+  - src: client.ts.tmpl
+    dst: lib/trpc.ts
+    merge: replace

@@ -1,0 +1,13 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+{{- if eq (index .Stack "backend") "go-chi"}}
+startCommand = "./api/app"
+{{- else if eq (index .Stack "frontend") "nextjs-14"}}
+startCommand = "npm start"
+{{- else}}
+# startCommand = ""
+{{- end}}
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

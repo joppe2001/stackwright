@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "{{if eq (index .Stack "frontend") "nextjs-14"}}nextjs{{else}}other{{end}}",
+  "buildCommand": "{{if eq (index .Stack "frontend") "nextjs-14"}}next build{{else}}npm run build{{end}}",
+  "installCommand": "npm ci"
+}

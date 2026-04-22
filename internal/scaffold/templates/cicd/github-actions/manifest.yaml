@@ -1,0 +1,4 @@
+files:
+  - src: ci.yml.tmpl
+    dst: .github/workflows/ci.yml
+    merge: replace

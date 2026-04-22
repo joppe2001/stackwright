@@ -1,0 +1,29 @@
+{{- if eq (index .Stack "backend") "go-chi"}}
+FROM golang:1.22-alpine AS build
+WORKDIR /src
+COPY api/ ./api/
+WORKDIR /src/api
+RUN go build -o /out/app ./...
+
+FROM gcr.io/distroless/base-debian12
+COPY --from=build /out/app /app
+EXPOSE 8080
+ENTRYPOINT ["/app"]
+{{- else if eq (index .Stack "frontend") "nextjs-14"}}
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS run
+WORKDIR /app
+COPY --from=build /app ./
+EXPOSE 3000
+CMD ["npm", "start"]
+{{- else}}
+# Fill me in: no frontend or backend detected in the stack.
+FROM alpine:3
+CMD ["echo", "configure Dockerfile for {{.AppName}}"]
+{{- end}}

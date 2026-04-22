@@ -1,0 +1,10 @@
+files:
+  - src: Dockerfile.tmpl
+    dst: Dockerfile
+    merge: replace
+  - src: docker-compose.yml.tmpl
+    dst: docker-compose.yml
+    merge: replace
+  - src: .dockerignore.tmpl
+    dst: .dockerignore
+    merge: append

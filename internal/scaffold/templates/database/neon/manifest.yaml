@@ -1,7 +1,4 @@
 files:
-  - src: init.sql.tmpl
-    dst: db/init.sql
-    merge: replace
   - src: env.sample.tmpl
     dst: .env.sample
     merge: append

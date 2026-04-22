@@ -1,0 +1,7 @@
+files:
+  - src: drizzle.config.ts.tmpl
+    dst: drizzle.config.ts
+    merge: replace
+  - src: schema.ts.tmpl
+    dst: db/schema.ts
+    merge: replace
