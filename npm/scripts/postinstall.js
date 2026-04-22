@@ -34,6 +34,10 @@ async function main() {
   // repeat installs from the same tarball).
   if (fs.existsSync(binPath)) {
     console.log(`stackwright: binary already present at ${binPath}`);
+  } else if (process.env.STACKWRIGHT_SKIP_DOWNLOAD === "1") {
+    // Explicit opt-out for CI / local dev against a yet-to-be-uploaded release.
+    console.log(`stackwright: STACKWRIGHT_SKIP_DOWNLOAD=1 — skipping binary download`);
+    console.log(`stackwright: place the binary at ${binPath} before running the CLI`);
   } else {
     fs.mkdirSync(binDir, { recursive: true });
     const url = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${version}/stackwright-${tag}.tar.gz`;

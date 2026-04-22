@@ -2,8 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"text/tabwriter"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/joppe2001/stackwright/internal/registry"
 	"github.com/spf13/cobra"
@@ -63,11 +69,12 @@ var registrySearchCmd = &cobra.Command{
 var registryShareCmd = &cobra.Command{
 	Use:   "share <slug>",
 	Short: "Open a pre-filled GitHub issue to upstream a local registry entry",
-	Args:  cobra.ExactArgs(1),
+	Long: `Reads <slug> from registry.local.yaml and opens a GitHub issue on
+joppe2001/stackwright-registry with the entry body pre-filled. Use this to
+contribute a tool you've added locally to the community catalog.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
-		// Full implementation lands in Step 12. Placeholder keeps the CLI surface stable.
-		fmt.Printf("stackwright registry share: not yet implemented (slug=%q)\n", args[0])
-		return nil
+		return shareLocalEntry(args[0])
 	},
 }
 
@@ -89,4 +96,93 @@ func authSummary(e registry.Entry) string {
 		return "-"
 	}
 	return "yes"
+}
+
+// shareLocalEntry reads the named slug from registry.local.yaml, formats the
+// entry as a YAML block, URL-encodes it as a GitHub issue body, and opens
+// the user's browser at the issue-new page on the registry repo.
+//
+// No network call is made — we just construct the URL and shell out to the
+// OS "open URL" helper. The user reviews and submits the issue themselves.
+const (
+	registryOwner = "joppe2001"
+	registryRepo  = "stackwright-registry"
+)
+
+func shareLocalEntry(slug string) error {
+	local, err := registry.ReadLocal()
+	if err != nil {
+		return fmt.Errorf("read local registry: %w", err)
+	}
+	if local == nil {
+		return fmt.Errorf("no registry.local.yaml found — run stackwright and add a tech via 'a' first")
+	}
+	var entry *registry.Entry
+	for i := range local.Entries {
+		if local.Entries[i].Slug == slug {
+			entry = &local.Entries[i]
+			break
+		}
+	}
+	if entry == nil {
+		return fmt.Errorf("slug %q not found in registry.local.yaml", slug)
+	}
+
+	body, err := formatIssueBody(*entry)
+	if err != nil {
+		return err
+	}
+
+	title := fmt.Sprintf("Add %s", entry.Name)
+	issueURL := fmt.Sprintf("https://github.com/%s/%s/issues/new?title=%s&body=%s",
+		registryOwner, registryRepo,
+		url.QueryEscape(title),
+		url.QueryEscape(body),
+	)
+
+	if err := openInBrowser(issueURL); err != nil {
+		// Print the URL so the user can open it manually if the helper failed.
+		fmt.Fprintln(os.Stdout, "could not open browser; visit this URL manually:")
+		fmt.Fprintln(os.Stdout, issueURL)
+		return nil
+	}
+	fmt.Fprintf(os.Stdout, "Opened browser with pre-filled issue for %s.\nThank you for contributing.\n", entry.Name)
+	return nil
+}
+
+// formatIssueBody renders a YAML entry plus a brief contribution note.
+// Kept simple: a markdown wrapper around the YAML makes the issue readable
+// both in the browser and after maintainers accept it.
+func formatIssueBody(e registry.Entry) (string, error) {
+	var buf strings.Builder
+	buf.WriteString("Contributing a new technology to the stackwright registry.\n\n")
+	buf.WriteString("## Proposed entry\n\n")
+	buf.WriteString("```yaml\n")
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(e); err != nil {
+		return "", err
+	}
+	_ = enc.Close()
+	buf.WriteString("```\n\n")
+	buf.WriteString("## Why\n\n")
+	buf.WriteString("_Explain briefly why this tool belongs in the catalog._\n")
+	return buf.String(), nil
+}
+
+// openInBrowser delegates to the OS "open URL" helper. On error the caller
+// falls back to printing the URL so the user can copy/paste.
+func openInBrowser(u string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", u)
+	case "linux":
+		cmd = exec.Command("xdg-open", u)
+	case "windows":
+		cmd = exec.Command("cmd", "/C", "start", "", u)
+	default:
+		return fmt.Errorf("no browser helper for %s", runtime.GOOS)
+	}
+	return cmd.Start()
 }

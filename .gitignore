@@ -4,3 +4,5 @@
 dist/
 stackwright
 stackwright.exe
+npm/bin/binary/
+node_modules/
