@@ -168,6 +168,10 @@ func parseHexRGBA(hex string) color.RGBA {
 
 // drawPNGNode paints one node card: filled background, colored accent bar
 // on the left, border, and the title rendered with the bitmap font.
+//
+// When the entry has a LogoURL and the logo is cached (see logos.go), a
+// 32x32 resized logo is blitted at the start of the label area, pushing
+// the title text right. Unreachable logos fall back to monogram-free text.
 func drawPNGNode(img *image.RGBA, n Node) {
 	x0 := n.Col * pxPerCellHoriz
 	y0 := n.Row * pxPerCellVert
@@ -191,11 +195,39 @@ func drawPNGNode(img *image.RGBA, n Node) {
 	// 3px accent bar on the left (per the spec).
 	fillRect(img, x0, y0, x0+3, y1, border)
 
+	// Try to place a logo at the start of the label area. Logo is square
+	// and fills the card's vertical padding area minus a 2px margin.
+	textX := x0 + diagramLabelInset
+	cardH := y1 - y0
+	if cardH >= 36 {
+		if logo := loadLogo(n.Entry.LogoURL); logo != nil {
+			lx := x0 + 6
+			ly := y0 + (cardH-logoPixelSize)/2
+			drawImageAt(img, logo, lx, ly)
+			textX = lx + logoPixelSize + 6
+		}
+	}
+
 	// Title text using the basicfont 7x13 face — reliable, bundled in x/image/font.
-	drawText(img, n.Title, x0+diagramLabelInset, y0+(y1-y0)/2+4, parseHexRGBA("#c8c6e0"))
+	drawText(img, n.Title, textX, y0+cardH/2+4, parseHexRGBA("#c8c6e0"))
 	// Subtitle (category) in muted color, one line below when space allows.
-	if y1-y0 >= 30 {
-		drawText(img, string(n.Entry.Category), x0+diagramLabelInset, y0+(y1-y0)/2+20, parseHexRGBA("#6060a0"))
+	if cardH >= 30 {
+		drawText(img, string(n.Entry.Category), textX, y0+cardH/2+20, parseHexRGBA("#6060a0"))
+	}
+}
+
+// drawImageAt blits src onto dst at (x, y). Keeps the call site in drawPNGNode
+// clean and factors out the bounds-clipping math.
+func drawImageAt(dst, src *image.RGBA, x, y int) {
+	sb := src.Bounds()
+	for yy := 0; yy < sb.Dy(); yy++ {
+		for xx := 0; xx < sb.Dx(); xx++ {
+			c := src.RGBAAt(xx, yy)
+			if c.A == 0 {
+				continue // preserve card background through transparent pixels
+			}
+			setPixel(dst, x+xx, y+yy, c)
+		}
 	}
 }
 

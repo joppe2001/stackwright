@@ -1,0 +1,128 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+            tag: darwin-arm64
+          - os: macos-13
+            goos: darwin
+            goarch: amd64
+            tag: darwin-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            tag: linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            tag: linux-arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            tag: windows-amd64
+            exe: .exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          # Embed the tag name as the version so `stackwright --version` matches the release.
+          go build -trimpath \
+            -ldflags="-s -w -X github.com/joppe2001/stackwright/cmd.Version=${GITHUB_REF_NAME}" \
+            -o "dist/stackwright${{ matrix.exe }}" \
+            .
+
+      - name: Package tarball
+        shell: bash
+        run: |
+          cd dist
+          tar -czf "stackwright-${{ matrix.tag }}.tar.gz" "stackwright${{ matrix.exe }}"
+          ls -la
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stackwright-${{ matrix.tag }}
+          path: dist/stackwright-${{ matrix.tag }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -la release-assets
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "stackwright ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            release-assets/*.tar.gz
+
+  # npm publish runs only when a maintainer has configured the NPM_TOKEN secret.
+  # Secrets can't be referenced in job-level `if:` conditions, so we forward
+  # the token through env and gate the publish step itself on its presence.
+  publish-npm:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Bump npm package.json to tag version
+        working-directory: npm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Publish to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN_PRESENT: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if [ "$NPM_TOKEN_PRESENT" != "true" ]; then
+            echo "NPM_TOKEN secret not set — skipping publish."
+            exit 0
+          fi
+          npm publish --access public
