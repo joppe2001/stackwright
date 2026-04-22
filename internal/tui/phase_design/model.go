@@ -9,15 +9,27 @@
 package phase_design
 
 import (
-	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/joppe2001/stackwright/internal/registry"
 	"github.com/joppe2001/stackwright/internal/tui"
+	"github.com/joppe2001/stackwright/internal/tui/phase_design/diagram"
 	"github.com/joppe2001/stackwright/internal/tui/theme"
 )
+
+// tickMsg advances the diagram's animation frame.
+type tickMsg struct{}
+
+// tickInterval: 100ms = 10fps. Gentle on bubbletea's diffing and enough for
+// visible particle motion on the connection traces.
+const tickInterval = 100 * time.Millisecond
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
+}
 
 // Model is the design phase's tea.Model. Not literally a tea.Model because
 // phases don't run their own tea.Program — the root model calls their
@@ -27,12 +39,17 @@ type Model struct {
 	stack    tui.Stack
 
 	layers layersModel
+	modal  unknownModal
 
 	// leftWidth is how wide the left pane gets. Rest is the diagram.
 	leftWidth int
 	// width/height are the design-phase content area (inside any parent chrome).
 	width  int
 	height int
+
+	// frame is the animation counter incremented by tickMsg. Used by the
+	// diagram renderer to advance particle positions.
+	frame int
 }
 
 // New returns a fresh design-phase model seeded with the registry and an empty stack.
@@ -42,6 +59,7 @@ func New(bundle registry.Bundle) Model {
 		registry:  bundle,
 		stack:     stack,
 		layers:    newLayersModel(bundle, stack),
+		modal:     newUnknownModal(),
 		leftWidth: 24,
 	}
 }
@@ -58,16 +76,41 @@ func (m *Model) SetSize(w, h int) {
 	m.layers.setSize(m.leftWidth-2, h-2) // inner size, minus the border
 }
 
-// Init satisfies the tea.Model contract even though we don't own the program.
-func (m Model) Init() tea.Cmd { return nil }
+// Init starts the animation tick loop.
+func (m Model) Init() tea.Cmd { return tickCmd() }
 
-// Update handles key events for the design phase.
+// Update handles key events and the animation tick for the design phase.
 // Unknown keys fall through so the root model can handle globals.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+	// Modal takes priority when visible.
+	if m.modal.visible {
+		entry, saved, cancelled, cmd := m.modal.Update(msg)
+		if saved {
+			// Add to in-memory bundle so the layer navigator finds it immediately.
+			m.registry.Entries = append(m.registry.Entries, entry)
+			m.layers.registry = m.registry
+			// Auto-select the new entry for the layer it was created under.
+			m.stack = m.stack.WithSelection(m.modal.forLayer, entry.Slug)
+			m.layers.syncStack(m.stack)
+			m.layers.closeSub()
+			return m, tea.Batch(cmd, emitStack(m.stack))
+		}
+		if cancelled {
+			m.layers.closeSub()
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
+	case tickMsg:
+		m.frame = (m.frame + 1) % 10000
+		return m, tickCmd()
 	case tui.StackUpdateMsg:
 		m.stack = msg.Stack
 		m.layers.syncStack(m.stack)
+		return m, nil
+	case openModalMsg:
+		m.modal.Open(msg.layer)
 		return m, nil
 	case tea.KeyMsg:
 		// 'g' advances to setup — but only if there's at least one selection.
@@ -83,11 +126,20 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // View renders the full design phase at the current window size.
+// When the unknown-tech modal is visible, it's composited on top.
 func (m Model) View() string {
+	var body string
 	if m.width < 80 {
-		return m.viewNarrow()
+		body = m.viewNarrow()
+	} else {
+		body = m.viewWide()
 	}
-	return m.viewWide()
+	if m.modal.visible {
+		// Place the modal over the composed body. lipgloss.Place + the body
+		// height keeps the background visible as context behind the overlay.
+		return m.modal.View(m.width, m.height)
+	}
+	return body
 }
 
 func (m Model) viewWide() string {
@@ -103,7 +155,7 @@ func (m Model) viewWide() string {
 	right := theme.PaneBorder.
 		Width(rightInnerW).
 		Height(innerH).
-		Render(m.rightPlaceholder(rightInnerW, innerH))
+		Render(m.renderDiagram(rightInnerW, innerH))
 
 	return sideBySide(left, right)
 }
@@ -116,54 +168,36 @@ func (m Model) viewNarrow() string {
 		Render(m.layers.View(m.width-4, m.height-4))
 }
 
-// rightPlaceholder is shown until Step 6 wires the real diagram.
-func (m Model) rightPlaceholder(w, h int) string {
+// renderDiagram produces the right-pane content. When the stack has no
+// selections yet, shows a help hint; otherwise renders the live diagram.
+func (m Model) renderDiagram(w, h int) string {
 	entries := m.stack.SelectedEntries(m.registry)
-	var b strings.Builder
-	b.WriteString(theme.Accent.Render("LIVE DIAGRAM"))
-	b.WriteString("  ")
-	b.WriteString(theme.Dim.Render("(standard/Kitty renderer lands in Steps 6 & 8)"))
-	b.WriteString("\n\n")
-
-	if m.stack.AppName == "" {
-		b.WriteString(theme.Dim.Render("Set an app name to begin."))
-		return b.String()
-	}
-	b.WriteString("app: ")
-	b.WriteString(m.stack.AppName)
-	b.WriteString("\n\n")
 	if len(entries) == 0 {
-		b.WriteString(theme.Dim.Render("No technologies selected yet."))
+		var b strings.Builder
+		b.WriteString(theme.Accent.Render("LIVE DIAGRAM"))
+		b.WriteString("\n\n")
+		if m.stack.AppName == "" {
+			b.WriteString(theme.Dim.Render("Set an app name, then pick a technology for a layer."))
+		} else {
+			b.WriteString(theme.Dim.Render("Pick a technology for a layer to see the diagram."))
+		}
 		return b.String()
 	}
 
-	// Render a super simple "stacked node" preview until the real diagram arrives.
-	for i, e := range entries {
-		arrow := " "
-		if i > 0 {
-			arrow = "│"
-		}
-		b.WriteString(theme.Dim.Render(arrow))
-		b.WriteString("\n")
-		b.WriteString(renderNode(e))
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(theme.Dim.Render(fmt.Sprintf("%d / %d layers set", countSet(m.stack), len(tui.AllLayers))))
-	b.WriteString("\n")
+	layout := diagram.Compute(m.stack, m.registry, w, h-2)
+	body := diagram.RenderStandard(layout, m.frame)
+
+	var footer string
 	if m.readyToAdvance() {
-		b.WriteString(theme.Good.Render("Press 'g' to continue to setup."))
+		footer = theme.Good.Render("  Press 'g' to continue to setup.")
+	} else {
+		footer = theme.Dim.Render("  Keep selecting layers…")
 	}
-	return b.String()
+	return body + "\n" + footer
 }
 
-func renderNode(e registry.Entry) string {
-	// Compact one-line node card for the placeholder diagram.
-	return fmt.Sprintf("  ▪ %s  %s",
-		theme.Accent.Render(e.Name),
-		theme.Dim.Render("("+string(e.Category)+")"))
-}
-
+// countSet reports how many layers in the stack are populated.
+// Kept for future use by the setup/scaffold phases' stack previews.
 func countSet(s tui.Stack) int {
 	n := 0
 	for _, l := range tui.AllLayers {

@@ -193,6 +193,9 @@ func (m *layersModel) updateSubList(msg tea.KeyMsg) (tea.Cmd, bool) {
 		m.subSearching = true
 		m.subQuery = ""
 		return nil, true
+	case "a":
+		// Request the design model to open the unknown-tech modal for this layer.
+		return openModalCmd(m.subLayer), true
 	case "enter", " ":
 		list := m.currentSubList()
 		if len(list) == 0 {
@@ -206,6 +209,19 @@ func (m *layersModel) updateSubList(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return emitStack(m.stack), true
 	}
 	return nil, false
+}
+
+// closeSub returns to the top-level layer list (used after the unknown-tech
+// modal finishes; the design model calls this on the layers component).
+func (m *layersModel) closeSub() { m.mode = modeLayerList }
+
+// openModalMsg asks the parent design model to open the unknown-tech modal
+// for the given layer. We route via a message instead of a direct call so
+// the design model owns all modal state.
+type openModalMsg struct{ layer tui.Layer }
+
+func openModalCmd(l tui.Layer) tea.Cmd {
+	return func() tea.Msg { return openModalMsg{layer: l} }
 }
 
 func (m *layersModel) updateAppNameEdit(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -294,7 +310,7 @@ func (m layersModel) viewSubList(w, h int) string {
 	if len(list) == 0 {
 		b.WriteString(theme.Dim.Render("no matches — press esc to go back"))
 		b.WriteString("\n")
-		b.WriteString(theme.Dim.Render("(Step 7 will add: press 'a' to add new tech)"))
+		b.WriteString(theme.Dim.Render("press 'a' to add a new technology"))
 		return fitToHeight(b.String(), h)
 	}
 	maxRows := h - 6
@@ -326,7 +342,7 @@ func (m layersModel) viewSubList(w, h int) string {
 	if m.subSearching {
 		b.WriteString(theme.Dim.Render("typing · searching   enter · accept   esc · cancel"))
 	} else {
-		b.WriteString(theme.Dim.Render("↑↓ nav   / search   enter select   esc back"))
+		b.WriteString(theme.Dim.Render("↑↓ nav   / search   a add new   enter select   esc back"))
 	}
 	return fitToHeight(b.String(), h)
 }
