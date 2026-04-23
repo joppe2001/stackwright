@@ -48,12 +48,15 @@ type techProgress struct {
 	output   []string
 	errMsg   string
 
-	// browserStatus is set after the user presses `o` on the account prompt.
-	// Non-empty means feedback is pending display under the action row.
-	// "" = unset, otherwise e.g. "opened signup in your browser" or
-	// "couldn't open browser: …; copy the URL above manually".
+	// browserStatus is set either after the user presses `o` on the account
+	// prompt OR after we auto-open a URL detected in the auth command's
+	// streaming output. Non-empty means feedback is pending display.
 	browserStatus string
 	browserOK     bool
+
+	// seenURLs tracks which URLs we've already auto-opened from this tech's
+	// auth output so rapid re-prints don't trigger duplicate browser launches.
+	seenURLs map[string]bool
 }
 
 // maxOutputLines bounds how much streaming output we keep in memory per tech.
@@ -211,7 +214,30 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case processLineMsg:
 		if msg.idx == m.cur && m.cur < len(m.items) {
-			m.items[m.cur].output = appendCapped(m.items[m.cur].output, msg.line, maxOutputLines)
+			it := &m.items[m.cur]
+			it.output = appendCapped(it.output, msg.line, maxOutputLines)
+			// Auto-open URLs emitted during auth — covers CLIs that print
+			// the auth URL (flyctl, vercel, railway, gh, pscale, supabase,
+			// neonctl, etc.). Each URL opens once per tech even if the
+			// CLI re-prints it.
+			if it.state == stAuthRunning {
+				for _, u := range ExtractURLs(msg.line) {
+					if it.seenURLs == nil {
+						it.seenURLs = map[string]bool{}
+					}
+					if it.seenURLs[u] {
+						continue
+					}
+					it.seenURLs[u] = true
+					if err := OpenURL(u); err != nil {
+						it.browserOK = false
+						it.browserStatus = "couldn't auto-open " + u + ": " + err.Error()
+					} else {
+						it.browserOK = true
+						it.browserStatus = "auto-opened " + u
+					}
+				}
+			}
 		}
 		return m, readLineCmd(msg.idx, m.proc)
 
@@ -582,8 +608,29 @@ func (m Model) renderDetail() string {
 			b.WriteString(actionRow("y Run auth", "s Skip"))
 		}
 	case stAuthRunning:
-		b.WriteString(theme.Dim.Render("Running auth — may open a browser…"))
-		b.WriteString("\n\n")
+		b.WriteString(theme.Dim.Render("Running auth — watching for a URL to auto-open…"))
+		b.WriteString("\n")
+		if it.browserStatus != "" {
+			if it.browserOK {
+				b.WriteString(theme.Good.Render("✓ " + it.browserStatus))
+			} else {
+				b.WriteString(theme.Accent.Render("✗ " + it.browserStatus))
+			}
+			b.WriteString("\n")
+		}
+		// List every URL we've seen so far so the user can copy-paste if
+		// auto-open missed any or if the browser was the wrong one.
+		if len(it.seenURLs) > 0 {
+			b.WriteString("\n")
+			b.WriteString(theme.Dim.Render("URLs from this flow:"))
+			b.WriteString("\n")
+			for u := range it.seenURLs {
+				b.WriteString("  ")
+				b.WriteString(theme.Accent.Render(u))
+				b.WriteString("\n")
+			}
+		}
+		b.WriteString("\n")
 		b.WriteString(renderOutput(it.output))
 	case stVerifying:
 		b.WriteString(theme.Dim.Render("Verifying auth…"))

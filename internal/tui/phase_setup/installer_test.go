@@ -81,6 +81,62 @@ func TestStartCommandEcho(t *testing.T) {
 	}
 }
 
+func TestExtractURLs(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "flyctl output",
+			in:   "Opening https://fly.io/app/auth-cli/abc123 in your browser",
+			want: []string{"https://fly.io/app/auth-cli/abc123"},
+		},
+		{
+			name: "gh auth device flow",
+			in:   "First copy your one-time code: ABCD-1234\nThen visit https://github.com/login/device to continue.",
+			want: []string{"https://github.com/login/device"},
+		},
+		{
+			name: "url with query",
+			in:   "Visit https://example.com/auth?token=abc&state=xyz please",
+			want: []string{"https://example.com/auth?token=abc&state=xyz"},
+		},
+		{
+			name: "url in parens stripped",
+			in:   "See docs (https://example.com/docs) for help.",
+			want: []string{"https://example.com/docs"},
+		},
+		{
+			name: "trailing punctuation removed",
+			in:   "See https://example.com/page.",
+			want: []string{"https://example.com/page"},
+		},
+		{
+			name: "multiple urls deduped",
+			in:   "Go to https://example.com/a or https://example.com/b or https://example.com/a again",
+			want: []string{"https://example.com/a", "https://example.com/b"},
+		},
+		{
+			name: "no urls",
+			in:   "Your pairing code is: bravo-amply-tough-reward",
+			want: nil,
+		},
+	}
+	for _, tc := range cases {
+		got := ExtractURLs(tc.in)
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: got %d urls (%v), want %d (%v)", tc.name, len(got), got, len(tc.want), tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("%s[%d]: got %q want %q", tc.name, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
 func TestSetupOrder(t *testing.T) {
 	entries := []registry.Entry{
 		{Slug: "a", Category: registry.CategoryFrontend},

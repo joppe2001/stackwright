@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -280,3 +281,31 @@ func SetupOrder(entries []registry.Entry) []registry.Entry {
 
 // AuthTimeout is the hard ceiling on a single auth command (spec: 5 min).
 const AuthTimeout = 5 * time.Minute
+
+// urlRegex matches http(s) URLs in streaming CLI output. The negated class
+// excludes typical terminators (quotes, brackets, whitespace) so we don't
+// grab trailing punctuation.
+var urlRegex = regexp.MustCompile(`https?://[^\s"'<>()\[\]{}|\\^` + "`" + `]+`)
+
+// ExtractURLs returns every http(s) URL found in s, de-duplicated while
+// preserving first-seen order. Used by the setup wizard to auto-open the
+// URL an auth CLI prints (most auth flows).
+func ExtractURLs(s string) []string {
+	matches := urlRegex.FindAllString(s, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(matches))
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		// Strip trailing punctuation that's not part of the URL
+		// (periods/commas at end of sentence, for example).
+		m = strings.TrimRight(m, ".,;:!?")
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		out = append(out, m)
+	}
+	return out
+}
